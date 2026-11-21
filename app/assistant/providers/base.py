@@ -7,7 +7,7 @@ are shared by every provider. To add a provider, implement `LLMProvider` and
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -76,8 +76,17 @@ class ModelResponseError(ProviderError):
     allow_fallback = False
 
 
+TextCallback = Callable[[str], None]
+
+
 class Conversation(ABC):
-    """One chat with the model. Keeps the provider's native message history."""
+    """One chat with the model. Keeps the provider's native message history.
+
+    If `on_text` is set, providers that support streaming call it with each piece of reply
+    text as it is generated. Providers that don't stream simply ignore it.
+    """
+
+    on_text: TextCallback | None = None
 
     @abstractmethod
     def send_user_message(self, text: str) -> ModelTurn: ...
@@ -101,6 +110,9 @@ class LLMProvider(ABC):
 
     def check_ready(self) -> None:
         """Raise ProviderError if the provider can't be used right now."""
+
+    def warm_up(self, system_prompt: str, tools: Sequence[ToolSpec]) -> None:
+        """Optionally prepare the model (e.g. load it into memory). Default: nothing to do."""
 
     @property
     def label(self) -> str:

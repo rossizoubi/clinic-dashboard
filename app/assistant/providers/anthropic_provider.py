@@ -47,17 +47,23 @@ class AnthropicProvider(LLMProvider):
     ) -> Conversation:
         return AnthropicConversation(self, system_prompt, tools, history)
 
-    def _create(self, system: str, tools: list, messages: list) -> anthropic.types.Message:
+    def _create(self, system: str, tools: list, messages: list, on_text=None) -> anthropic.types.Message:
+        params = dict(
+            model=self.model,
+            max_tokens=MAX_TOKENS,
+            system=system,
+            tools=tools,
+            messages=messages,
+            output_config={"effort": "low"},  # short chat turns don't need deep reasoning
+            cache_control={"type": "ephemeral"},  # caches the stable prompt + tools prefix
+        )
         try:
-            return self.client.messages.create(
-                model=self.model,
-                max_tokens=MAX_TOKENS,
-                system=system,
-                tools=tools,
-                messages=messages,
-                output_config={"effort": "low"},  # short chat turns don't need deep reasoning
-                cache_control={"type": "ephemeral"},  # caches the stable prompt + tools prefix
-            )
+            if on_text is None:
+                return self.client.messages.create(**params)
+            with self.client.messages.stream(**params) as stream:
+                for text in stream.text_stream:
+                    on_text(text)
+                return stream.get_final_message()
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as exc:
             raise ProviderNotConfigured(
                 "The Claude API key was rejected. Check ANTHROPIC_API_KEY in .env.", str(exc)
@@ -116,7 +122,7 @@ class AnthropicConversation(Conversation):
         self.messages.append({"role": "assistant", "content": assistant_text})
 
     def _complete(self) -> ModelTurn:
-        response = self._provider._create(self._system, self._tools, self.messages)
+        response = self._provider._create(self._system, self._tools, self.messages, self.on_text)
         # Append the full content (including any thinking blocks) unchanged, as the API requires.
         self.messages.append({"role": "assistant", "content": response.content})
 

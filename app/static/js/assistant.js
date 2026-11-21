@@ -46,6 +46,15 @@
     addRow(role, options).bubble.textContent = clean(text);
   }
 
+  // What the assistant is doing while a tool runs.
+  const TOOL_LABELS = {
+    list_doctors: "Looking up our doctors",
+    find_available_slots: "Checking free slots",
+    book_slot: "Preparing your booking",
+    find_bookings: "Looking up your bookings",
+    cancel_booking: "Preparing the cancellation",
+  };
+
   function showTyping() {
     const { item, bubble } = addRow("assistant");
     bubble.classList.add("flex", "items-center", "gap-3");
@@ -60,14 +69,23 @@
     note.className = "text-xs text-slate-400";
     bubble.append(dots, note);
     const started = Date.now();
-    // Local models on a CPU can take a while; show elapsed time so it doesn't look frozen.
-    const timer = setInterval(() => {
+    let status = "Thinking";
+    // Show what's happening and the elapsed time, so a slow local model doesn't look frozen.
+    const render = () => {
       const seconds = Math.round((Date.now() - started) / 1000);
-      if (seconds >= 5) note.textContent = `${seconds}s · local models can be slow on a CPU`;
-    }, 1000);
-    return () => {
-      clearInterval(timer);
-      item.remove();
+      note.textContent = seconds >= 3 ? `${status}… ${seconds}s` : `${status}…`;
+    };
+    render();
+    const timer = setInterval(render, 1000);
+    return {
+      setStatus(text) {
+        status = text;
+        render();
+      },
+      stop() {
+        clearInterval(timer);
+        item.remove();
+      },
     };
   }
 
@@ -119,14 +137,88 @@
 
   async function run(request) {
     setBusy(true);
-    const stopTyping = showTyping();
+    const typing = showTyping();
     try {
       const data = await request();
-      stopTyping();
+      typing.stop();
       addMessage("assistant", data.reply, { error: data.error });
       renderPending(data.pending);
     } catch (err) {
-      stopTyping();
+      typing.stop();
+      addMessage("assistant", err.message || "Network error. Please try again.", { error: true });
+    } finally {
+      setBusy(false);
+      input.focus();
+    }
+  }
+
+  // Sends a chat message and shows the reply as it streams in (newline-delimited JSON events).
+  async function streamChat(text) {
+    setBusy(true);
+    let typing = showTyping();
+    let live = null; // the reply bubble being streamed into
+    let streamed = "";
+    let result = null;
+
+    const dropLive = () => {
+      if (live) live.item.remove();
+      live = null;
+      streamed = "";
+    };
+    const handle = (event) => {
+      if (event.type === "delta") {
+        if (typing) typing.stop();
+        typing = null;
+        if (!live) live = addRow("assistant");
+        streamed += event.text;
+        live.bubble.textContent = clean(streamed);
+        messages.scrollTop = messages.scrollHeight;
+      } else if (event.type === "reset" || event.type === "tool") {
+        dropLive();
+        if (!typing) typing = showTyping();
+        if (event.type === "tool") typing.setStatus(TOOL_LABELS[event.name] || "Working on it");
+      } else if (event.type === "done") {
+        result = event;
+      }
+    };
+
+    try {
+      const response = await fetch("/api/assistant/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Something went wrong. Please try again.");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let newline;
+        while ((newline = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, newline).trim();
+          buffer = buffer.slice(newline + 1);
+          if (line) handle(JSON.parse(line));
+        }
+      }
+      if (!result) throw new Error("The connection was interrupted. Please try again.");
+
+      if (typing) typing.stop();
+      // The final text is authoritative (it may differ slightly from what was streamed).
+      if (live && !result.error) live.bubble.textContent = clean(result.reply);
+      else {
+        dropLive();
+        addMessage("assistant", result.reply, { error: result.error });
+      }
+      renderPending(result.pending);
+    } catch (err) {
+      if (typing) typing.stop();
+      dropLive();
       addMessage("assistant", err.message || "Network error. Please try again.", { error: true });
     } finally {
       setBusy(false);
@@ -140,7 +232,7 @@
     el("suggestions").classList.add("hidden");
     addMessage("user", text);
     input.value = "";
-    run(() => post("/api/assistant/chat", { message: text }));
+    streamChat(text);
   }
 
   form.addEventListener("submit", (event) => {

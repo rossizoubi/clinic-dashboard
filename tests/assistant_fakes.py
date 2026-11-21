@@ -32,11 +32,18 @@ class ScriptedConversation(Conversation):
 
     def send_user_message(self, text: str) -> ModelTurn:
         self.user_messages.append(text)
-        return self.provider.next_turn()
+        return self._stream(self.provider.next_turn())
 
     def send_tool_results(self, results: Sequence[ToolResult]) -> ModelTurn:
         self.tool_results.extend(results)
-        return self.provider.next_turn()
+        return self._stream(self.provider.next_turn())
+
+    def _stream(self, turn: ModelTurn) -> ModelTurn:
+        # Like a real streaming provider: send the reply text in small pieces.
+        if self.on_text and turn.text:
+            for start in range(0, len(turn.text), 8):
+                self.on_text(turn.text[start : start + 8])
+        return turn
 
     def add_exchange(self, user_text: str, assistant_text: str) -> None:
         self.exchanges.append((user_text, assistant_text))

@@ -13,9 +13,9 @@
 
 <div class="mt-4">{{ ui.steps(2) }}</div>
 
-<div class="mt-6 grid gap-6 lg:grid-cols-12">
+<div class="booking-layout mt-6 grid gap-6 lg:grid-cols-12">
     <!-- Doctor -->
-    <aside class="min-w-0 self-start rounded-xl border border-slate-200 bg-white p-5 shadow-xs lg:col-span-4">
+    <aside class="doctor-summary min-w-0 self-start rounded-xl border border-slate-200 bg-white p-5 shadow-xs lg:col-span-4">
         <div class="flex items-center gap-3">
             {{ ui.doctor_avatar(doctor, "h-12 w-12 text-base") }}
             <div>
@@ -35,7 +35,7 @@
     </aside>
 
     <!-- Day and time -->
-    <section class="min-w-0 rounded-xl border border-slate-200 bg-white shadow-xs lg:col-span-8" aria-labelledby="time-heading">
+    <section class="slot-picker min-w-0 rounded-xl border border-slate-200 bg-white shadow-xs lg:col-span-8" aria-labelledby="time-heading">
         <div class="border-b border-slate-100 px-5 py-4">
             <h2 id="time-heading" class="text-base font-semibold text-slate-900">Choose a day</h2>
         </div>
@@ -47,13 +47,13 @@
             <li class="shrink-0">
                 {% if available %}
                 <a href="{{ day.url }}" {% if active %}aria-current="date"{% endif %}
-                   class="flex w-[4.5rem] flex-col items-center rounded-xl px-2 py-2.5 text-center transition {{ 'bg-teal-700 text-white shadow-sm' if active else 'bg-white text-slate-700 ring-1 ring-slate-200 ring-inset hover:ring-teal-400' }}">
+                   class="flex w-[4.5rem] flex-col items-center rounded-xl px-2 py-2.5 text-center transition {{ 'bg-blue-700 text-white shadow-sm' if active else 'bg-white text-slate-700 ring-1 ring-slate-200 ring-inset hover:ring-blue-400' }}">
                 {% else %}
                 <span class="flex w-[4.5rem] flex-col items-center rounded-xl px-2 py-2.5 text-center {{ 'bg-slate-100 text-slate-500 ring-1 ring-slate-300 ring-inset' if active else 'bg-slate-50 text-slate-400' }}" {% if active %}aria-current="date"{% endif %}>
                 {% endif %}
                     <span class="text-xs font-medium">{{ "Today" if loop.first else day.date.strftime('%a') }}</span>
                     <span class="text-lg font-semibold tabular-nums">{{ day.date.day }}</span>
-                    <span class="text-[11px] {{ 'text-teal-100' if active and available else '' }}">
+                    <span class="text-[11px] {{ 'text-blue-100' if active and available else '' }}">
                         {% if day.closed %}Closed{% elif available %}{{ day.free }} free{% else %}Full{% endif %}
                     </span>
                 {% if available %}</a>{% else %}</span>{% endif %}
@@ -71,7 +71,7 @@
                     <ul class="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
                         {% for slot in slots %}
                         <li>
-                            <a href="/book/{{ slot.id }}" class="block rounded-lg px-2 py-2.5 text-center text-sm font-semibold text-teal-800 tabular-nums ring-1 ring-teal-600/25 ring-inset transition hover:bg-teal-700 hover:text-white hover:ring-teal-700">
+                            <a href="/book/{{ slot.id }}" class="block rounded-lg px-2 py-2.5 text-center text-sm font-semibold text-blue-800 tabular-nums ring-1 ring-blue-600/25 ring-inset transition hover:bg-blue-700 hover:text-white hover:ring-blue-700">
                                 {{ slot.start_time.strftime('%H:%M') }}
                             </a>
                         </li>

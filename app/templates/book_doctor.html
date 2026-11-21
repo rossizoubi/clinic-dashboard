@@ -6,44 +6,64 @@
 {% block toasts %}{% if error_message %}{{ ui.toast("error", error_message) }}{% endif %}{% endblock %}
 
 {% block content %}
-<div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-    <div>
-        {{ ui.steps(1) }}
-        <h1 class="mt-5 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Book an appointment</h1>
-        <p class="mt-2 max-w-2xl text-sm text-slate-500 sm:text-base">Choose a doctor to see their available times. Booking takes less than a minute and needs only your name and phone number.</p>
+<section class="welcome-hero">
+    <div class="welcome-copy">
+        <span class="eyebrow"><span class="eyebrow-dot"></span> Thoughtful care, made simple</span>
+        <h1>Feel better about<br class="hidden sm:block"> getting care.</h1>
+        <p>Find the right doctor, choose a time that works, and book your visit in just a few easy steps.</p>
+        <div class="hero-actions">
+            <a href="#doctors" class="hero-primary">Find your doctor {{ ui.icon("chevron-right", "h-4 w-4") }}</a>
+            <a href="/assistant" class="hero-secondary">{{ ui.icon("sparkles", "h-4 w-4") }} Get help choosing</a>
+        </div>
+        <div class="hero-trust">
+            <span>{{ ui.icon("check-circle", "h-4 w-4") }} Clear appointment times</span>
+            <span>{{ ui.icon("lock", "h-4 w-4") }} Your details stay private</span>
+        </div>
     </div>
-    <a href="/assistant" class="group flex max-w-sm items-center gap-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs transition hover:border-teal-300 hover:shadow-sm">
-        <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-700 ring-1 ring-teal-600/15 ring-inset">{{ ui.icon("sparkles", "h-[18px] w-[18px]") }}</span>
-        <span class="text-sm">
-            <span class="block font-medium text-slate-900">Not sure which doctor?</span>
-            <span class="block text-slate-500">Describe what you need to our booking assistant.</span>
-        </span>
-        {{ ui.icon("chevron-right", "ml-auto h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-teal-700") }}
-    </a>
+    <div class="welcome-art" aria-hidden="true">
+        <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+        <div class="art-cross">+</div>
+        <div class="care-card">
+            <div class="care-card-top"><span class="care-symbol">{{ ui.icon("check-circle", "h-5 w-5") }}</span><span class="care-status">Simple & secure</span></div>
+            <p class="care-title">Your next step<br>starts here.</p>
+            <div class="care-line"><span class="care-line-icon">{{ ui.icon("calendar", "h-4 w-4") }}</span><span><b>Choose a doctor</b><small>Browse by specialty</small></span></div>
+            <div class="care-line"><span class="care-line-icon">{{ ui.icon("clock", "h-4 w-4") }}</span><span><b>Pick a time</b><small>See real availability</small></span></div>
+        </div>
+        <div class="art-sparkle sparkle-a">✳</div><div class="art-sparkle sparkle-b">✦</div>
+    </div>
+</section>
+
+<div class="section-heading">
+    <div>
+        <span class="eyebrow eyebrow-muted">Care that fits your needs</span>
+        <h2>Choose your specialist</h2>
+        <p>Explore our doctors and find the care that feels right for you.</p>
+    </div>
+    <span class="doctor-count">{{ cards|length }} {{ "doctor" if cards|length == 1 else "doctors" }} available</span>
 </div>
 
 <!-- Specialty filter -->
-<nav class="mt-8 flex flex-wrap gap-2" aria-label="Filter by specialty">
+<nav class="specialty-filters mt-5 flex flex-wrap gap-2" aria-label="Filter by specialty">
     <a href="/" {% if not specialty %}aria-current="true"{% endif %}
-       class="rounded-full px-3.5 py-1.5 text-sm font-medium transition {{ 'bg-teal-700 text-white' if not specialty else 'bg-white text-slate-700 ring-1 ring-slate-200 ring-inset hover:bg-slate-50' }}">All specialties</a>
+       class="rounded-full px-3.5 py-1.5 text-sm font-medium transition {{ 'bg-blue-700 text-white' if not specialty else 'bg-white text-slate-700 ring-1 ring-slate-200 ring-inset hover:bg-slate-50' }}">All specialties</a>
     {% for name in specialties %}
     {% set tag = SPECIALTY_TAGS.get(name, DEFAULT_TAG) %}
     <a href="/?specialty={{ name | urlencode }}" {% if specialty == name %}aria-current="true"{% endif %}
-       class="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition {{ 'bg-teal-700 text-white' if specialty == name else 'bg-white text-slate-700 ring-1 ring-slate-200 ring-inset hover:bg-slate-50' }}">
+       class="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition {{ 'bg-blue-700 text-white' if specialty == name else 'bg-white text-slate-700 ring-1 ring-slate-200 ring-inset hover:bg-slate-50' }}">
         <span class="h-1.5 w-1.5 rounded-full {{ 'bg-white' if specialty == name else tag.dot }}" aria-hidden="true"></span>{{ name }}
     </a>
     {% endfor %}
 </nav>
 
 <!-- Doctors -->
-<ul class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+<ul id="doctors" class="doctor-grid mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
     {% for card in cards %}
     {% set doc = card.doctor %}
     {% set tag = SPECIALTY_TAGS.get(doc.specialty, DEFAULT_TAG) %}
     <li>
-        <a href="/doctors/{{ doc.id }}" class="group flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-xs transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700">
-            <div class="flex items-center gap-3">
-                {{ ui.doctor_avatar(doc, "h-12 w-12 text-base") }}
+        <a href="/doctors/{{ doc.id }}" class="group flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-xs transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">
+            <div class="doctor-card-head flex items-center gap-3">
+                <span class="doctor-avatar-wrap">{{ ui.doctor_avatar(doc, "h-12 w-12 text-base") }}</span>
                 <div class="min-w-0">
                     <h2 class="truncate text-base font-semibold text-slate-900">{{ doc.name }}</h2>
                     <p class="flex items-center gap-1.5 text-sm text-slate-500"><span class="h-1.5 w-1.5 rounded-full {{ tag.dot }}" aria-hidden="true"></span>{{ doc.specialty }}</p>
@@ -51,14 +71,14 @@
             </div>
 
             <dl class="mt-5 space-y-2 text-sm">
-                <div class="flex gap-2.5">
+                <div class="doctor-hours flex gap-2.5">
                     <dt class="sr-only">Working hours</dt>
                     {{ ui.icon("clock", "mt-0.5 h-4 w-4 shrink-0 text-slate-400") }}
                     <dd class="text-slate-600">
                         {% for hours in card.hours %}<span class="block">{{ hours.label() }}</span>{% else %}<span class="block">Hours to be announced</span>{% endfor %}
                     </dd>
                 </div>
-                <div class="flex gap-2.5">
+                <div class="doctor-next flex gap-2.5">
                     <dt class="sr-only">Next available</dt>
                     {{ ui.icon("calendar", "mt-0.5 h-4 w-4 shrink-0 text-slate-400") }}
                     <dd class="text-slate-600">
@@ -71,7 +91,7 @@
                 </div>
             </dl>
 
-            <span class="mt-auto inline-flex items-center gap-1.5 pt-5 text-sm font-semibold text-teal-700">
+            <span class="mt-auto inline-flex items-center gap-1.5 pt-5 text-sm font-semibold text-blue-700">
                 Choose a time {{ ui.icon("chevron-right", "h-4 w-4 transition group-hover:translate-x-0.5") }}
             </span>
         </a>
@@ -82,6 +102,6 @@
 </ul>
 
 <p class="mt-8 text-sm text-slate-500">
-    Already booked? <a href="/my-appointments" class="font-medium text-teal-700 hover:text-teal-800">View or cancel your appointment</a>.
+    Already booked? <a href="/my-appointments" class="font-medium text-blue-700 hover:text-blue-800">View or cancel your appointment</a>.
 </p>
 {% endblock %}

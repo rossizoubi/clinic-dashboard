@@ -5,7 +5,7 @@ Staff manage schedules and bookings from a dashboard, and patients can book, che
 appointments by chatting with an **AI booking assistant that runs on a local LLM**.
 
 Built with **FastAPI**, **SQLAlchemy 2.0**, **Jinja2**, **Tailwind CSS** and **Ollama** (`qwen2.5:7b`),
-with optional support for the **Claude API**. 207 tests, Docker support.
+with optional support for the **Claude API**. 212 tests, Docker support.
 
 ![ClinicBook dashboard](docs/screenshot.png)
 
@@ -22,7 +22,8 @@ with optional support for the **Claude API**. 207 tests, Docker support.
   - A patient can't book the same doctor twice on the same day.
   - A patient can't hold two overlapping appointments.
   - Slots that have already started can't be booked.
-- **Day overview**: doctor cards with free-slot counts for the day, day-by-day navigation, and occupancy stats.
+- **Day overview**: day totals (booked, open, occupancy, doctors on duty), a doctor list with free-slot counts, and day-by-day navigation. Opens on the first doctor's schedule.
+- **Fast front-desk workflow**: book from an inline form inside the slot row, create schedules in a slide-over panel with length presets and a live "8 slots of 30 minutes" preview, and confirm before cancelling. Slots that have already started are shown as passed.
 - **Cancel bookings** to free a slot again.
 - **Clear feedback**: every failure (missing slot, already booked, invalid input) shows a specific message.
 - **Input validation** with Pydantic: slot duration range, end time after start time, no past dates, required name and phone number.
@@ -38,9 +39,11 @@ with optional support for the **Claude API**. 207 tests, Docker support.
 
 **Interface**
 
-- Responsive layout for desktop and mobile, built with Tailwind CSS and no build step.
-- Consistent design: shared icon and alert macros (Heroicons), a colour per specialty, gradient accents.
-- Accessible: labelled form fields, screen-reader names for icon-only links, `aria-live` chat updates, and animations turned off for users who prefer reduced motion.
+- Calm, clinical design in the style of practice-management software: a sidebar workspace, one teal accent colour, neutral surfaces, and muted specialty tags.
+- Smooth navigation: page transitions with the View Transitions API, link prefetching with Speculation Rules, scroll position kept after every action, and notifications that dismiss themselves.
+- Safe interactions: buttons show a busy state and can't be double-submitted, and cancellations ask for confirmation.
+- Responsive layout for desktop and mobile, built with Tailwind CSS and no build step. Everything works without JavaScript; scripts only add enhancements.
+- Accessible: native `<dialog>` and `<details>` elements, labelled form fields, a skip link, screen-reader names for icon-only links, `aria-live` updates, and motion turned off for users who prefer reduced motion.
 
 ## Tech stack
 
@@ -322,8 +325,8 @@ clinic-dashboard/
 │   │   ├── appointments.py  # dashboard
 │   │   └── assistant.py     # chat page + JSON API
 │   ├── templates/           # base.html, home.html, assistant.html, _ui.html (icon/alert macros)
-│   └── static/              # css/app.css, js/assistant.js, img/logo.svg
-├── tests/                   # pytest suite (207 tests)
+│   └── static/              # css/app.css, js/app.js (page enhancements), js/assistant.js, img/logo.svg
+├── tests/                   # pytest suite (212 tests)
 ├── docs/                    # screenshots
 ├── Dockerfile
 ├── docker-compose.yml       # app + ollama + model pull

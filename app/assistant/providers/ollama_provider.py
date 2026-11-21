@@ -30,11 +30,13 @@ class OllamaProvider(LLMProvider):
         host: str,
         temperature: float = 0.1,
         timeout: float = 120.0,
+        num_thread: int | None = None,
         client: ollama.Client | None = None,
     ):
         self.model = model
         self.host = host
         self.temperature = temperature
+        self.num_thread = num_thread
         self.client = client or ollama.Client(host=host, timeout=timeout)
 
     def start_conversation(
@@ -44,6 +46,13 @@ class OllamaProvider(LLMProvider):
 
     def check_ready(self) -> None:
         self._call(self.client.show, self.model)
+
+    def warm_up(self, system_prompt: str, tools: Sequence[ToolSpec]) -> None:
+        """Load the model and cache the system prompt + tools, so the first real chat starts fast."""
+        conversation = OllamaConversation(self, system_prompt, tools, ())
+        kwargs = self._chat_kwargs(conversation.messages + [{"role": "user", "content": "hi"}], conversation._tools)
+        kwargs["options"]["num_predict"] = 1
+        self._call(self.client.chat, **kwargs)
 
     # -- internals ---------------------------------------------------------
 
@@ -74,16 +83,41 @@ class OllamaProvider(LLMProvider):
         except httpx.HTTPError as exc:
             raise ProviderUnavailable(f"Can't reach Ollama at {self.host}.", str(exc)) from exc
 
-    def _chat(self, messages: list, tools: list) -> ollama.ChatResponse:
-        kwargs = dict(model=self.model, messages=messages, tools=tools, options={"temperature": self.temperature})
+    def _chat_kwargs(self, messages: list, tools: list) -> dict:
+        options: dict = {"temperature": self.temperature}
+        if self.num_thread:
+            options["num_thread"] = self.num_thread
+        return dict(model=self.model, messages=messages, tools=tools, options=options)
+
+    def _chat(self, messages: list, tools: list, on_text=None) -> tuple[str, list]:
+        """Run one chat request. Returns (reply text, tool calls); streams text to on_text if given."""
+        kwargs = self._chat_kwargs(messages, tools)
+        streamed = False
+
+        def run() -> tuple[str, list]:
+            nonlocal streamed
+            if on_text is None:
+                message = self.client.chat(**kwargs).message
+                return message.content or "", list(message.tool_calls or [])
+            parts, calls = [], []
+            for chunk in self.client.chat(**kwargs, stream=True):
+                piece = chunk.message.content or ""
+                if piece:
+                    parts.append(piece)
+                    streamed = True
+                    on_text(piece)
+                calls.extend(chunk.message.tool_calls or [])
+            return "".join(parts), calls
+
         try:
-            return self._call(self.client.chat, **kwargs)
+            return self._call(run)
         except ProviderUnavailable as exc:
             # Ollama answers 500 when a small model emits a malformed tool call; one retry usually fixes it.
-            if "returned an error" not in exc.user_message:
+            # Not retried once text has been streamed, so the patient never sees it twice.
+            if "returned an error" not in exc.user_message or streamed:
                 raise
             logger.warning("Ollama chat failed, retrying once: %s", exc)
-            return self._call(self.client.chat, **kwargs)
+            return self._call(run)
 
 
 class OllamaConversation(Conversation):
@@ -117,12 +151,11 @@ class OllamaConversation(Conversation):
         self.messages.append({"role": "assistant", "content": assistant_text})
 
     def _complete(self) -> ModelTurn:
-        response = self._provider._chat(self.messages, self._tools)
-        message = response.message
-        self.messages.append(message)
+        content, tool_calls = self._provider._chat(self.messages, self._tools, self.on_text)
+        self.messages.append(ollama.Message(role="assistant", content=content, tool_calls=tool_calls or None))
 
         calls = []
-        for tool_call in message.tool_calls or []:
+        for tool_call in tool_calls:
             self._call_count += 1
             calls.append(
                 ToolCall(
@@ -131,4 +164,4 @@ class OllamaConversation(Conversation):
                     arguments=dict(tool_call.function.arguments or {}),
                 )
             )
-        return ModelTurn(text=message.content or "", tool_calls=calls)
+        return ModelTurn(text=content, tool_calls=calls)

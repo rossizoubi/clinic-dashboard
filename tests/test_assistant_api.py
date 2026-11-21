@@ -121,3 +121,43 @@ def test_session_store_expires_and_caps_sessions():
     expired = SessionStore(ttl_seconds=-1)
     old = expired.get_or_create(None)
     assert expired.get_or_create(old.id).id != old.id
+
+
+def stream_events(client, message: str) -> list[dict]:
+    import json
+
+    with client.stream("POST", "/api/assistant/chat/stream", json={"message": message}) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/x-ndjson")
+        return [json.loads(line) for line in response.iter_lines() if line]
+
+
+def test_streaming_endpoint(client, use_provider):
+    use_provider(call("list_doctors"), say("We have four doctors."))
+
+    events = stream_events(client, "Which doctors do you have?")
+
+    assert {"type": "tool", "name": "list_doctors"} in events
+    assert "".join(e["text"] for e in events if e["type"] == "delta") == "We have four doctors."
+    assert events[-1] == {
+        "type": "done",
+        "reply": "We have four doctors.",
+        "pending": None,
+        "error": False,
+        "provider": "fake · scripted",
+    }
+
+
+def test_streaming_endpoint_reports_provider_errors(client, use_provider):
+    from app.assistant.providers.base import ProviderUnavailable
+
+    use_provider(ProviderUnavailable("Can't reach Ollama."))
+    events = stream_events(client, "hi")
+    assert events[-1]["type"] == "done" and events[-1]["error"] is True
+    assert events[-1]["reply"] == "Can't reach Ollama."
+
+
+def test_streaming_endpoint_validates_input(client, use_provider):
+    use_provider()
+    response = client.post("/api/assistant/chat/stream", json={"message": "  "})
+    assert response.status_code == 400

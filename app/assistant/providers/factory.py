@@ -16,6 +16,7 @@ def build_provider(name: str) -> LLMProvider:
             host=config.OLLAMA_HOST,
             temperature=config.OLLAMA_TEMPERATURE,
             timeout=config.OLLAMA_TIMEOUT,
+            num_thread=config.OLLAMA_NUM_THREAD,
         )
     if name == "anthropic":
         # Imported lazily: the Anthropic SDK is only needed when Claude is selected.

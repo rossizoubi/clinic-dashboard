@@ -248,3 +248,74 @@ def test_confirm_button_when_slot_was_taken_meanwhile(db, session, slots):
 def test_confirm_with_nothing_pending(db, session):
     reply = BookingAssistant(ScriptedProvider()).confirm(session, db, accept=True)
     assert "nothing waiting" in reply.text
+
+
+# --- Streaming ------------------------------------------------------------------
+
+
+def collect(events: list):
+    return lambda kind, **data: events.append((kind, data))
+
+
+def test_reply_text_is_streamed(db, session):
+    events = []
+    provider = ScriptedProvider(say("Hello! Which doctor would you like to see?"))
+
+    reply = BookingAssistant(provider).reply(session, db, "hi", on_event=collect(events))
+
+    streamed = "".join(data["text"] for kind, data in events if kind == "delta")
+    assert streamed == reply.text == "Hello! Which doctor would you like to see?"
+
+
+def test_tool_use_is_announced_and_earlier_text_reset(db, session, slots):
+    events = []
+    provider = ScriptedProvider(
+        ModelTurn(text="Let me check.", tool_calls=search().tool_calls),
+        say("Dr. Rasool is free at 09:00."),
+    )
+
+    BookingAssistant(provider).reply(session, db, "dermatologist tomorrow", on_event=collect(events))
+
+    kinds = [kind for kind, _ in events]
+    assert ("tool", {"name": "find_available_slots"}) in events
+    # "Let me check." is streamed, then discarded before the tool runs, then the answer streams.
+    assert kinds.index("reset") < kinds.index("tool") < len(kinds) - 1
+    assert "".join(d["text"] for k, d in events[kinds.index("tool"):] if k == "delta") == "Dr. Rasool is free at 09:00."
+
+
+def test_tool_call_written_as_text_is_never_streamed(db, session):
+    events = []
+    provider = ScriptedProvider(say('{"name": "list_doctors", "arguments": {}}'), say("We have four doctors."))
+
+    BookingAssistant(provider).reply(session, db, "doctors?", on_event=collect(events))
+
+    streamed = "".join(d["text"] for k, d in events if k == "delta")
+    assert '"name"' not in streamed and "{" not in streamed
+    assert streamed.endswith("We have four doctors.")
+
+
+def test_on_text_is_cleared_after_the_turn(db, session):
+    provider = ScriptedProvider(say("Hi!"))
+    BookingAssistant(provider).reply(session, db, "hi", on_event=collect([]))
+    assert provider.conversation.on_text is None
+
+
+def test_warm_up_uses_the_primary_provider(db):
+    calls = []
+    provider = ScriptedProvider()
+    provider.warm_up = lambda prompt, tools: calls.append((prompt, len(tools)))
+
+    BookingAssistant(provider).warm_up(db)
+
+    assert len(calls) == 1 and "Dr. Rasool" in calls[0][0] and calls[0][1] == 5
+
+
+def test_warm_up_never_raises(db):
+    provider = ScriptedProvider()
+
+    def fail(prompt, tools):
+        raise ProviderUnavailable("Ollama is not running")
+
+    provider.warm_up = fail
+    BookingAssistant(provider).warm_up(db)  # logged, not raised
+    BookingAssistant(None).warm_up(db)

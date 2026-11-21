@@ -7,9 +7,14 @@ Hardening for small local models:
 - the loop is capped at MAX_TOOL_ROUNDS per message,
 - bookings and cancellations need the patient's confirmation (enforced in tools.py),
 - provider failures become a friendly message, with an optional fallback provider.
+
+Progress can be streamed to the UI through an `on_event(kind, **data)` callback:
+"delta" (a piece of reply text), "tool" (a tool is being run) and "reset" (discard
+streamed text: the model is starting a new round).
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -38,6 +43,37 @@ class AgentReply:
     pending: dict | None = None
     error: bool = False
     provider: str | None = None
+
+
+EventCallback = Callable[..., None]
+
+# Text that looks like the start of a tool call written as plain text (see parsing.py).
+_TOOL_CALL_MARKERS = ("{", "<tool_call", "```")
+
+
+class _TextStreamer:
+    """Forwards reply text to the UI, but holds it back once it looks like a tool call in text form."""
+
+    def __init__(self, emit: EventCallback):
+        self.emit = emit
+        self.text = ""
+        self.muted = False
+
+    def new_round(self) -> None:
+        if self.text:
+            self.emit("reset")
+        self.text = ""
+        self.muted = False
+
+    def __call__(self, piece: str) -> None:
+        if self.muted:
+            return
+        self.text += piece
+        if any(marker in self.text for marker in _TOOL_CALL_MARKERS):
+            self.muted = True
+            self.emit("reset")
+            return
+        self.emit("delta", text=piece)
 
 
 class _GiveUp(Exception):
@@ -73,9 +109,22 @@ class BookingAssistant:
                 errors.append(exc.user_message)
         return {"ready": False, "provider": self.providers[0].label, "message": errors[0]}
 
+    def warm_up(self, db: Session) -> None:
+        """Prepare the primary model in advance. Failures are logged, never raised."""
+        if self.primary is None:
+            return
+        try:
+            prompt = build_system_prompt(services.list_doctors(db), today())
+            self.primary.warm_up(prompt, TOOL_SPECS)
+            logger.info("Assistant model %s is warmed up", self.primary.label)
+        except Exception as exc:  # e.g. Ollama not running yet; the chat reports it properly later
+            logger.info("Assistant warm-up skipped: %s", exc)
+
     # -- chat ---------------------------------------------------------------
 
-    def reply(self, session: ChatSession, db: Session, user_text: str) -> AgentReply:
+    def reply(
+        self, session: ChatSession, db: Session, user_text: str, on_event: EventCallback | None = None
+    ) -> AgentReply:
         user_text = user_text.strip()
         if len(session.transcript) // 2 >= MAX_TURNS_PER_SESSION:
             return self._reply(session, texts.text("conversation_too_long"), error=True)
@@ -86,9 +135,11 @@ class BookingAssistant:
         last_error: ProviderError | None = None
         for provider in self._providers_for(session):
             try:
-                answer = self._run_turn(session, provider, db, user_text)
+                answer = self._run_turn(session, provider, db, user_text, on_event)
             except ProviderError as exc:
                 logger.warning("Provider %s failed: %s", provider.label, exc)
+                if on_event:
+                    on_event("reset")
                 session.conversation = None  # rebuild from the transcript next time
                 last_error = exc
                 if not exc.allow_fallback:
@@ -132,14 +183,28 @@ class BookingAssistant:
         current = session.provider if session.provider in self.providers else self.primary
         return [current] + [p for p in self.providers if p is not current]
 
-    def _run_turn(self, session: ChatSession, provider: LLMProvider, db: Session, user_text: str) -> str:
+    def _run_turn(
+        self,
+        session: ChatSession,
+        provider: LLMProvider,
+        db: Session,
+        user_text: str,
+        on_event: EventCallback | None = None,
+    ) -> str:
         if session.conversation is None or session.provider is not provider:
             prompt = build_system_prompt(services.list_doctors(db), today())
             session.conversation = provider.start_conversation(prompt, TOOL_SPECS, session.transcript)
             session.provider = provider
         conversation = session.conversation
         executor = ToolExecutor(db, session.state)
+        streamer = _TextStreamer(on_event) if on_event else None
+        conversation.on_text = streamer
+        try:
+            return self._tool_loop(conversation, executor, user_text, streamer, on_event)
+        finally:
+            conversation.on_text = None
 
+    def _tool_loop(self, conversation, executor, user_text, streamer, on_event) -> str:
         turn = conversation.send_user_message(user_text)
         invalid_calls = 0
         for _ in range(MAX_TOOL_ROUNDS):
@@ -149,6 +214,11 @@ class BookingAssistant:
             if not calls:
                 return visible_text.strip() or texts.text("empty_reply")
 
+            if streamer:
+                streamer.new_round()
+            for call in calls:
+                if on_event:
+                    on_event("tool", name=call.name)
             results = [executor.execute(call) for call in calls]
             for call, result in zip(calls, results):
                 logger.info("tool %s -> %s", call.name, result.error_code or "ok")

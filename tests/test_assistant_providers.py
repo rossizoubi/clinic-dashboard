@@ -274,3 +274,76 @@ def test_claude_without_key_falls_back_to_ollama(monkeypatch):
 def test_fallback_is_off_by_default():
     primary, fallback, error = build_providers("ollama", "")
     assert isinstance(primary, OllamaProvider) and fallback is None and error is None
+
+
+# --- Streaming and performance settings ---------------------------------------
+
+
+def test_ollama_streams_text_and_collects_tool_calls(ollama_client):
+    provider = OllamaProvider(model="qwen2.5:7b", host="http://localhost:11434", num_thread=4, client=ollama_client)
+    ollama_client.chat.return_value = iter(
+        [ollama_reply("Let me "), ollama_reply("check."), ollama_reply(tool_calls=[("list_doctors", {})])]
+    )
+    pieces: list[str] = []
+    conversation = provider.start_conversation("SYSTEM", TOOL_SPECS)
+    conversation.on_text = pieces.append
+
+    turn = conversation.send_user_message("doctors?")
+
+    kwargs = ollama_client.chat.call_args.kwargs
+    assert kwargs["stream"] is True
+    assert kwargs["options"] == {"temperature": 0.1, "num_thread": 4}
+    assert pieces == ["Let me ", "check."]
+    assert turn.text == "Let me check."
+    assert [c.name for c in turn.tool_calls] == ["list_doctors"]
+    assert conversation.messages[-1].tool_calls[0].function.name == "list_doctors"  # kept in history
+
+
+def test_ollama_does_not_retry_after_text_was_streamed(ollama_client):
+    provider = OllamaProvider(model="qwen2.5:7b", host="http://localhost:11434", client=ollama_client)
+
+    def broken_stream(**kwargs):
+        yield ollama_reply("Hello")
+        raise ollama.ResponseError("stream broke", 500)
+
+    ollama_client.chat.side_effect = broken_stream
+    conversation = provider.start_conversation("SYSTEM", TOOL_SPECS)
+    conversation.on_text = lambda piece: None
+    with pytest.raises(ProviderUnavailable):
+        conversation.send_user_message("hi")
+    assert ollama_client.chat.call_count == 1
+
+
+def test_anthropic_streams_text(claude_provider, claude_client):
+    stream = MagicMock()
+    stream.text_stream = iter(["Hello", " there"])
+    stream.get_final_message.return_value = claude_reply([{"type": "text", "text": "Hello there"}])
+    claude_client.messages.stream.return_value.__enter__.return_value = stream
+    pieces: list[str] = []
+    conversation = claude_provider.start_conversation("SYSTEM", TOOL_SPECS)
+    conversation.on_text = pieces.append
+
+    turn = conversation.send_user_message("hi")
+
+    assert pieces == ["Hello", " there"]
+    assert turn.text == "Hello there"
+    claude_client.messages.create.assert_not_called()
+
+
+@pytest.mark.parametrize(("value", "cpus", "expected"), [("", 8, 4), ("", 1, 1), ("6", 8, 6), ("0", 8, None), ("x", 8, None)])
+def test_num_thread_setting(monkeypatch, value, cpus, expected):
+    from app import config
+
+    monkeypatch.setenv("OLLAMA_NUM_THREAD", value)
+    monkeypatch.setattr(config.os, "cpu_count", lambda: cpus)
+    assert config._num_threads() == expected
+
+
+def test_ollama_warm_up_requests_a_single_token(ollama_client):
+    provider = OllamaProvider(model="qwen2.5:7b", host="http://localhost:11434", num_thread=4, client=ollama_client)
+    provider.warm_up("SYSTEM", TOOL_SPECS)
+
+    kwargs = ollama_client.chat.call_args.kwargs
+    assert kwargs["messages"][0] == {"role": "system", "content": "SYSTEM"}
+    assert kwargs["options"] == {"temperature": 0.1, "num_thread": 4, "num_predict": 1}
+    assert len(kwargs["tools"]) == len(TOOL_SPECS)

@@ -5,7 +5,7 @@ Staff manage schedules and bookings from a dashboard, and patients can book, che
 appointments by chatting with an **AI booking assistant that runs on a local LLM**.
 
 Built with **FastAPI**, **SQLAlchemy 2.0**, **Jinja2**, **Tailwind CSS** and **Ollama** (`qwen2.5:7b`),
-with optional support for the **Claude API**. 189 tests, Docker support.
+with optional support for the **Claude API**. 207 tests, Docker support.
 
 ![ClinicBook dashboard](docs/screenshot.png)
 
@@ -125,7 +125,7 @@ Claude is supported as an optional provider for setups where those trade-offs ar
 
 ```mermaid
 flowchart LR
-    UI["Chat page<br/>assistant.js"] -->|"POST /api/assistant/chat"| Router["routers/assistant.py"]
+    UI["Chat page<br/>assistant.js"] -->|"POST /api/assistant/chat/stream<br/>(streamed reply)"| Router["routers/assistant.py"]
     UI -->|"POST /api/assistant/confirm<br/>(Confirm button)"| Router
     Router --> Agent["BookingAssistant<br/>agent.py"]
     Agent -->|"LLMProvider interface"| Providers
@@ -228,7 +228,26 @@ Then open http://localhost:8000/assistant.
 **Hardware requirements**
 
 - `qwen2.5:7b` needs about **8 GB of free RAM** (the model is ~4.7 GB on disk and ~5 GB in memory).
-- A GPU makes replies much faster. On a CPU only, expect slow replies: on a laptop i7 inside Docker Desktop (8 GB VM) we measured about 1.6 tokens/s, or roughly 1–2 minutes per reply. The chat shows an elapsed-time counter so a slow reply doesn't look frozen.
+- Runs on a CPU; a GPU makes replies much faster.
+
+**Performance on a CPU**
+
+Measured on a laptop (Intel i7-1185G7, 4 cores / 8 threads, no GPU) with Ollama inside Docker Desktop:
+
+| | Before tuning | After |
+|---|---|---|
+| Generation speed | ~2.6 tokens/s | **~5.7 tokens/s** |
+| "hello" | 11–20 s, nothing shown until done | **first words after 0.2 s**, done in ~3 s |
+| Finding free slots (one tool call) | 60–130 s | **~22 s**, with a live "Checking free slots…" status |
+| First message after the model loads | ~66 s | **under 1 s** (the model is warmed up at startup) |
+
+What made the difference:
+
+1. **One thread per physical core.** By default Ollama used all 8 logical CPUs; hyper-threads compete for the same cores and generation ran at half speed. `OLLAMA_NUM_THREAD` now defaults to half the logical CPUs.
+2. **Streaming.** `POST /api/assistant/chat/stream` sends newline-delimited JSON events: reply text as it is generated, which tool is running, and the final result. Text that looks like a tool call written as plain text is held back, so JSON never flashes on screen.
+3. **Warm-up at startup.** The server loads the model and caches the system prompt and tool definitions in the background (`ASSISTANT_WARMUP`), so the first patient doesn't wait for a cold start.
+
+Running Ollama natively instead of in Docker Desktop, or on a GPU, is faster still.
 - Running Ollama natively instead of in Docker Desktop's VM, or using a GPU, helps a lot. A smaller model (`OLLAMA_MODEL=qwen2.5:3b`) is faster but less reliable at tool calling.
 
 ### Switching to Claude
@@ -269,6 +288,8 @@ All settings are read from environment variables or a `.env` file (see `.env.exa
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Local model name |
 | `OLLAMA_TEMPERATURE` | `0.1` | Sampling temperature, kept within 0–0.2 |
 | `OLLAMA_TIMEOUT` | `120` | Seconds to wait for a reply |
+| `OLLAMA_NUM_THREAD` | *(half the logical CPUs)* | CPU threads for the model; `0` lets Ollama decide |
+| `ASSISTANT_WARMUP` | `1` | Load the model in the background at startup |
 | `ANTHROPIC_API_KEY` | *(empty)* | Only needed for Claude |
 | `ANTHROPIC_MODEL` | `claude-haiku-5-5` | Claude model |
 
@@ -302,7 +323,7 @@ clinic-dashboard/
 │   │   └── assistant.py     # chat page + JSON API
 │   ├── templates/           # base.html, home.html, assistant.html, _ui.html (icon/alert macros)
 │   └── static/              # css/app.css, js/assistant.js, img/logo.svg
-├── tests/                   # pytest suite (189 tests)
+├── tests/                   # pytest suite (207 tests)
 ├── docs/                    # screenshots
 ├── Dockerfile
 ├── docker-compose.yml       # app + ollama + model pull

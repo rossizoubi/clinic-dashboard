@@ -13,6 +13,8 @@ patient to confirm. The change happens on a later call, after the patient has re
 
 import datetime as dt
 import json
+import re
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -51,6 +53,29 @@ SPECIALTY_ALIASES = {
     "general medicine": ["general", "gp", "family", "general practitioner"],
 }
 _TITLES = ("dr.", "dr ", "doctor ")
+
+
+def _identity_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    return "".join(character for character in normalized if character.isalnum())
+
+
+def identity_not_provided(patient_name: str, phone_number: str, user_inputs: list[str]) -> list[str]:
+    """Return identity fields that do not appear in the patient's own chat messages."""
+    name_key = _identity_text(patient_name)
+    name_was_provided = any(name_key in _identity_text(message) for message in user_inputs)
+    expected_phone = services.phone_key(phone_number)
+    phone_was_provided = any(
+        services.phone_key(candidate) == expected_phone
+        for message in user_inputs
+        for candidate in re.findall(r"(?<!\d)\+?\d(?:[\s().-]*\d){6,14}(?!\d)", message)
+    )
+    missing = []
+    if not name_was_provided:
+        missing.append("patient_name")
+    if not phone_was_provided:
+        missing.append("phone_number")
+    return missing
 
 
 # --- Per-chat state ---------------------------------------------------------
@@ -151,10 +176,16 @@ class CancelBookingArgs(_PatientArgs):
 # --- Tool definitions shown to the model --------------------------------------
 
 _PATIENT_PROPS = {
-    "patient_name": {"type": "string", "description": "Patient's full name, as the patient wrote it."},
+    "patient_name": {
+        "type": "string",
+        "description": "Full name explicitly typed by the patient in chat. Never invent or use a sample name.",
+    },
     "phone_number": {
         "type": "string",
-        "description": "Patient's phone number exactly as they wrote it, as a string. Keep any leading 0 or +.",
+        "description": (
+            "Phone number explicitly typed by the patient in chat, as a string. Keep any leading 0 or +. "
+            "Never invent or use a sample number."
+        ),
     },
 }
 
@@ -197,7 +228,9 @@ TOOL_SPECS: list[ToolSpec] = [
         name="book_slot",
         description=(
             "Book a slot for a patient. The first call does NOT book: it returns the details for the "
-            "patient to confirm. After the patient says yes, call it again with the same arguments."
+            "patient to confirm. Use only the patient's own name and phone number from their messages; "
+            "never use placeholders. If either is missing, ask first. After the patient says yes, call it again "
+            "with the same arguments."
         ),
         parameters={
             "type": "object",
@@ -330,9 +363,10 @@ def _format_validation_error(exc: ValidationError) -> list[str]:
 class ToolExecutor:
     """Runs tool calls from the model against the database for one chat."""
 
-    def __init__(self, db: Session, state: AssistantState):
+    def __init__(self, db: Session, state: AssistantState, user_inputs: list[str] | None = None):
         self.db = db
         self.state = state
+        self.user_inputs = user_inputs
         self._tools: dict[str, tuple[type[_Args], Callable[[Any], dict]]] = {
             "list_doctors": (ListDoctorsArgs, self._list_doctors),
             "find_available_slots": (FindAvailableSlotsArgs, self._find_available_slots),
@@ -369,12 +403,31 @@ class ToolExecutor:
                 problems=_format_validation_error(exc),
             )
 
+        if call.name in {"book_slot", "find_bookings", "cancel_booking"} and self.user_inputs is not None:
+            missing = self._identity_not_provided(args)
+            if missing:
+                pending = self.state.pending
+                if pending and identity_not_provided(
+                    pending.patient_name, pending.phone_number, self.user_inputs
+                ):
+                    self.state.pending = None
+                return self._error(
+                    call,
+                    "patient_details_not_provided",
+                    "The patient must provide these details in their own messages. Never invent or use placeholder "
+                    "identity data. Ask the patient for the missing details, then try again.",
+                    missing=missing,
+                )
+
         try:
             data = handler(args)
         except services.ServiceError as exc:
             message = _SERVICE_ERRORS.get(exc.code, "The request couldn't be completed.")
             return self._error(call, exc.code, message)
         return ToolResult(call=call, content=json.dumps(data, ensure_ascii=False))
+
+    def _identity_not_provided(self, args: _PatientArgs) -> list[str]:
+        return identity_not_provided(args.patient_name, args.phone_number, self.user_inputs or [])
 
     @staticmethod
     def _error(call: ToolCall, code: str, message: str, **extra) -> ToolResult:

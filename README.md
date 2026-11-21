@@ -41,10 +41,13 @@ with optional support for the **Claude API**. 192 tests, Docker support.
 - **Local-first**: runs on Ollama by default, with no API key and no internet connection.
 - **Confirmation enforced in code**: nothing is booked or cancelled until the patient confirms; the patient gets the same booking reference as on the booking page.
 - **Privacy**: looking up or cancelling a booking requires the patient's name **and** phone number.
+- **Stays on topic**: the assistant only handles clinic appointments and politely declines anything else (general questions, news, medical advice); patients can't talk it out of that role.
+- **Never invents patient details**: a name or phone number is only used if the patient typed it in their own messages.
 
 **Interface**
 
-- Calm, clinical design: one teal accent colour, neutral surfaces and muted specialty tags.
+- Calm, clinical design: one blue accent colour, neutral surfaces and muted specialty tags.
+- A welcoming home page with a short hero ("Find your doctor" / "Get help choosing") above the specialist list, and a wider layout on large screens.
 - Smooth navigation: page transitions with the View Transitions API, link prefetching with Speculation Rules, busy buttons that block double submits, and notifications that dismiss themselves.
 - Responsive for desktop and mobile, built with Tailwind CSS and no build step. Everything works without JavaScript; scripts only add enhancements.
 - Accessible: labelled form fields, a skip link, screen-reader names for icon-only links, `aria-current` on the booking steps and selected day, `aria-live` updates, and motion turned off for users who prefer reduced motion.
@@ -112,7 +115,7 @@ The tests use an in-memory SQLite database and a **scripted fake LLM**, so they 
 
 - the booking site: slots generated from the fixed working hours (closed days, slot lengths, daily refresh), the three booking steps, confirmation and calendar file, taken-slot handling, double-booking rules, and My appointments (lookup, cancel, and privacy)
 - the service layer: duplicate prevention, booking rules, cancelling, input validation
-- the assistant tools: argument validation, slot-ID checks, the confirmation guard, name + phone privacy rules
+- the assistant tools: argument validation, slot-ID checks, the confirmation guard, name + phone privacy rules, and rejecting patient details the patient never typed
 - the agent loop: tool calls written as text, retry and loop limits, provider errors, fallback provider, confirm buttons
 - the Ollama and Anthropic adapters, with mocked SDK clients
 - the assistant API endpoints
@@ -177,6 +180,8 @@ A 7B model is much less reliable at tool calling than a frontier model, so the c
 - **The confirmation card is built from the database**, so the patient always sees the real doctor, date and time, even if the model's own text gets a detail wrong.
 - **Date arithmetic is done in code.** The model can pass "Sunday" or "tomorrow" and `dates.py` resolves it. In testing, the 7B model mapped "Sunday" to the wrong date on its own.
 - **Text instead of tool calls**: if the model writes `{"name": "find_available_slots", ...}` as plain text, the call is recovered and run.
+- **Patient details must come from the patient.** Before `book_slot`, `find_bookings` or `cancel_booking` runs, the code checks that the name and phone number actually appear in the patient's own chat messages. A made-up or placeholder identity is rejected with `patient_details_not_provided`, and a pending booking built from one is dropped, even if the patient presses **Confirm**.
+- **Strict scope in the prompt.** Off-topic requests get a fixed reply, and requests to ignore the rules or change role are refused.
 - **Phone numbers** are compared without leading zeros, because small models often turn `0791234567` into `791234567`.
 - **Friendly errors**: if Ollama isn't running, the model isn't pulled, a request times out, or Claude is unreachable, the patient sees a clear message and the page shows a setup banner (for example *"Run: ollama pull qwen2.5:7b"*).
 
@@ -257,8 +262,7 @@ What made the difference:
 2. **Streaming.** `POST /api/assistant/chat/stream` sends newline-delimited JSON events: reply text as it is generated, which tool is running, and the final result. Text that looks like a tool call written as plain text is held back, so JSON never flashes on screen.
 3. **Warm-up at startup.** The server loads the model and caches the system prompt and tool definitions in the background (`ASSISTANT_WARMUP`), so the first patient doesn't wait for a cold start.
 
-Running Ollama natively instead of in Docker Desktop, or on a GPU, is faster still.
-- Running Ollama natively instead of in Docker Desktop's VM, or using a GPU, helps a lot. A smaller model (`OLLAMA_MODEL=qwen2.5:3b`) is faster but less reliable at tool calling.
+Running Ollama natively instead of in Docker Desktop's VM, or on a GPU, is faster still. A smaller model (`OLLAMA_MODEL=qwen2.5:3b`) is faster but less reliable at tool calling.
 
 ### Switching to Claude
 

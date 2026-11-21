@@ -15,7 +15,7 @@
 {% set error = kind == "error" %}
 <div data-toast role="{{ 'alert' if error else 'status' }}"
      class="toast pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border bg-white p-4 shadow-lg shadow-slate-900/10 {{ 'border-rose-200' if error else 'border-slate-200' }}">
-    <span class="mt-0.5 shrink-0 {{ 'text-rose-600' if error else 'text-teal-600' }}">{{ icon("alert" if error else "check-circle", "h-5 w-5") }}</span>
+    <span class="mt-0.5 shrink-0 {{ 'text-rose-600' if error else 'text-blue-600' }}">{{ icon("alert" if error else "check-circle", "h-5 w-5") }}</span>
     <div class="min-w-0 flex-1">
         <p class="text-sm font-semibold text-slate-900">{{ "Something needs attention" if error else "Done" }}</p>
         <p class="mt-0.5 text-sm text-slate-600">{{ text }}</p>
@@ -33,7 +33,7 @@
     {% set n = loop.index %}
     <li class="flex items-center gap-2 sm:gap-3" {% if n == current %}aria-current="step"{% endif %}>
         <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold
-            {{ 'bg-teal-700 text-white' if n == current else ('bg-teal-50 text-teal-700 ring-1 ring-teal-600/25 ring-inset' if n < current else 'bg-slate-100 text-slate-500') }}">
+            {{ 'bg-blue-700 text-white' if n == current else ('bg-blue-50 text-blue-700 ring-1 ring-blue-600/25 ring-inset' if n < current else 'bg-slate-100 text-slate-500') }}">
             {% if n < current %}{{ icon("check-circle", "h-4 w-4") }}{% else %}{{ n }}{% endif %}
         </span>
         <span class="{{ 'text-slate-900' if n == current else 'text-slate-500' }} {{ '' if n == current else 'hidden sm:inline' }}">{{ label }}</span>

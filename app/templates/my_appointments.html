@@ -6,13 +6,16 @@
 {% block toasts %}{% if success_message %}{{ ui.toast("success", success_message) }}{% endif %}{% endblock %}
 
 {% block content %}
-{% set input_cls = "block w-full rounded-lg border-0 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs ring-1 ring-slate-300 ring-inset placeholder:text-slate-400 transition focus:ring-2 focus:ring-teal-600 focus:outline-none" %}
+{% set input_cls = "block w-full rounded-lg border-0 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs ring-1 ring-slate-300 ring-inset placeholder:text-slate-400 transition focus:ring-2 focus:ring-blue-600 focus:outline-none" %}
 {% set values = values or {} %}
-<div class="mx-auto max-w-3xl">
-    <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">My appointments</h1>
-    <p class="mt-2 text-sm text-slate-500 sm:text-base">Enter the name and phone number you booked with to see or cancel your upcoming appointments.</p>
+<div class="appointments-page mx-auto max-w-4xl">
+    <header class="appointments-heading">
+        <span class="eyebrow"><span class="eyebrow-dot"></span> Your care, organized</span>
+        <h1 class="mt-3 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">My appointments</h1>
+        <p class="mt-2 text-sm text-slate-500 sm:text-base">See what's coming up or make a change to a visit.</p>
+    </header>
 
-    <form action="/my-appointments" method="post" class="mt-6 grid gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:grid-cols-[1fr_1fr_auto] sm:items-end" data-loading-text="Searching…">
+    <form action="/my-appointments" method="post" class="lookup-form mt-6 grid gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:grid-cols-[1fr_1fr_auto] sm:items-end" data-loading-text="Searching…">
         <div>
             <label for="patient_name" class="mb-1.5 block text-sm font-medium text-slate-700">Full name</label>
             <input id="patient_name" name="patient_name" type="text" value="{{ values.patient_name or '' }}" required maxlength="100" autocomplete="name" class="{{ input_cls }}">
@@ -21,7 +24,7 @@
             <label for="phone_number" class="mb-1.5 block text-sm font-medium text-slate-700">Phone number</label>
             <input id="phone_number" name="phone_number" type="tel" value="{{ values.phone_number or '' }}" required maxlength="20" autocomplete="tel" inputmode="tel" class="{{ input_cls }}">
         </div>
-        <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-teal-800 disabled:cursor-wait disabled:opacity-70">
+        <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-70">
             {{ ui.icon("search", "h-4 w-4") }} Find
         </button>
     </form>
@@ -38,9 +41,9 @@
         {% if bookings %}
         <ul class="mt-3 space-y-3">
             {% for slot in bookings %}
-            <li class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+            <li class="booking-row flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center gap-4">
-                    <div class="flex w-14 shrink-0 flex-col items-center rounded-lg bg-teal-50 py-1.5 text-teal-800 ring-1 ring-teal-600/15 ring-inset">
+                    <div class="flex w-14 shrink-0 flex-col items-center rounded-lg bg-blue-50 py-1.5 text-blue-800 ring-1 ring-blue-600/15 ring-inset">
                         <span class="text-[11px] font-semibold uppercase">{{ slot.date.strftime('%b') }}</span>
                         <span class="text-xl leading-tight font-semibold tabular-nums">{{ slot.date.day }}</span>
                     </div>
@@ -64,7 +67,7 @@
         <div class="mt-3 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
             <p class="text-sm font-medium text-slate-900">No upcoming appointments found</p>
             <p class="mt-1 text-sm text-slate-500">Check that the name and phone number match the ones you booked with.</p>
-            <a href="/" class="mt-4 inline-flex rounded-lg bg-teal-700 px-3.5 py-2 text-sm font-semibold text-white shadow-xs hover:bg-teal-800">Book an appointment</a>
+            <a href="/" class="mt-4 inline-flex rounded-lg bg-blue-700 px-3.5 py-2 text-sm font-semibold text-white shadow-xs hover:bg-blue-800">Book an appointment</a>
         </div>
         {% endif %}
     </section>

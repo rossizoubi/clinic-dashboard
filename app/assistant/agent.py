@@ -25,7 +25,7 @@ from app.assistant.parsing import extract_tool_calls
 from app.assistant.prompts import build_system_prompt
 from app.assistant.providers.base import ChatMessage, LLMProvider, ProviderError
 from app.assistant.sessions import ChatSession
-from app.assistant.tools import TOOL_NAMES, TOOL_SPECS, ToolExecutor
+from app.assistant.tools import TOOL_NAMES, TOOL_SPECS, ToolExecutor, identity_not_provided
 from app.clock import today
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ MAX_TOOL_ROUNDS = 6
 MAX_INVALID_TOOL_CALLS = 3
 MAX_MESSAGE_CHARS = 1000
 MAX_TURNS_PER_SESSION = 40
-_INVALID_CODES = {"invalid_arguments", "unknown_tool", "slot_not_offered"}
+_INVALID_CODES = {"invalid_arguments", "unknown_tool", "slot_not_offered", "patient_details_not_provided"}
 
 
 @dataclass
@@ -165,6 +165,17 @@ class BookingAssistant:
             self._record(session, texts.text("decline_user"), answer, add_to_model=True)
             return self._reply(session, answer)
 
+        user_inputs = [message.content for message in session.transcript if message.role == "user"]
+        missing = identity_not_provided(pending.patient_name, pending.phone_number, user_inputs)
+        if missing:
+            session.state.pending = None
+            answer = (
+                "I can't confirm this booking because the name or phone number wasn't provided by you. "
+                "Please start a new conversation and enter your own details when asked."
+            )
+            self._record(session, texts.text("confirm_user"), answer, add_to_model=True)
+            return self._reply(session, answer)
+
         executor = ToolExecutor(db, session.state)
         try:
             result = executor.run_pending()
@@ -196,7 +207,9 @@ class BookingAssistant:
             session.conversation = provider.start_conversation(prompt, TOOL_SPECS, session.transcript)
             session.provider = provider
         conversation = session.conversation
-        executor = ToolExecutor(db, session.state)
+        user_inputs = [message.content for message in session.transcript if message.role == "user"]
+        user_inputs.append(user_text)
+        executor = ToolExecutor(db, session.state, user_inputs=user_inputs)
         streamer = _TextStreamer(on_event) if on_event else None
         conversation.on_text = streamer
         try:

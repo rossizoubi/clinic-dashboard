@@ -112,17 +112,6 @@ def test_next_available_dates(db, doctor, future_day):
     assert dates == [future_day + dt.timedelta(days=d) for d in (1, 3, 4)]
 
 
-def test_dashboard_booking_requires_phone(client, db, doctor, future_day):
-    services.generate_slots(db, doctor.id, future_day, dt.time(9), dt.time(10), 30)
-    slot = services.list_slots(db, doctor.id, future_day)[0]
-
-    response = client.post(f"/book-slot/{slot.id}", data={"patient_name": "Lina", "phone_number": ""})
-    assert "valid phone number" in response.text
-    response = client.post(f"/book-slot/{slot.id}", data={"patient_name": "Lina", "phone_number": "079-123-4567"})
-    assert "Appointment booked." in response.text
-    assert "0791234567" in response.text
-
-
 def test_leading_zero_dropped_by_the_model_still_matches(db, booked):
     found = services.find_patient_bookings(db, "Lina Haddad", "791234567")
     assert [s.id for s in found] == [booked["lina"].id, booked["lina_2"].id]

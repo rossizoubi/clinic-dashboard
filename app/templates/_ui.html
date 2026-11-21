@@ -25,3 +25,20 @@
     </button>
 </div>
 {%- endmacro %}
+
+{# Booking progress: 1 Doctor · 2 Date & time · 3 Your details #}
+{% macro steps(current) -%}
+<ol class="flex items-center gap-2 text-xs font-medium sm:gap-3 sm:text-sm" aria-label="Booking steps">
+    {% for label in ["Doctor", "Date & time", "Your details"] %}
+    {% set n = loop.index %}
+    <li class="flex items-center gap-2 sm:gap-3" {% if n == current %}aria-current="step"{% endif %}>
+        <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold
+            {{ 'bg-teal-700 text-white' if n == current else ('bg-teal-50 text-teal-700 ring-1 ring-teal-600/25 ring-inset' if n < current else 'bg-slate-100 text-slate-500') }}">
+            {% if n < current %}{{ icon("check-circle", "h-4 w-4") }}{% else %}{{ n }}{% endif %}
+        </span>
+        <span class="{{ 'text-slate-900' if n == current else 'text-slate-500' }} {{ '' if n == current else 'hidden sm:inline' }}">{{ label }}</span>
+        {% if not loop.last %}<span class="h-px w-6 bg-slate-200 sm:w-10" aria-hidden="true"></span>{% endif %}
+    </li>
+    {% endfor %}
+</ol>
+{%- endmacro %}

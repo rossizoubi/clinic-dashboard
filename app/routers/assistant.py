@@ -77,7 +77,6 @@ def assistant_page(request: Request, assistant: BookingAssistant = Depends(get_a
         request=request,
         name="assistant.html",
         context={
-            "provider_label": provider.label if provider else None,
             "is_local": provider is not None and provider.name == "ollama",
             "max_chars": MAX_MESSAGE_CHARS,
         },

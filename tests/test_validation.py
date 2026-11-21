@@ -1,61 +1,15 @@
-import datetime as dt
+"""Validation of the patient booking form (name and phone number)."""
 
 import pytest
 from pydantic import ValidationError
 
-from app.schemas import BookingCreate, ScheduleCreate, error_code
+from app.schemas import BookingCreate, error_code
 
 
-def schedule(**overrides) -> dict:
-    data = {
-        "doctor_id": "1",
-        "date": (dt.date.today() + dt.timedelta(days=3)).isoformat(),
-        "start_time": "09:00",
-        "end_time": "12:00",
-        "slot_duration": "30",
-    }
-    return {**data, **overrides}
-
-
-def code_for(model, **data) -> str:
+def code_for(**data) -> str:
     with pytest.raises(ValidationError) as exc_info:
-        model(**data)
+        BookingCreate(**data)
     return error_code(exc_info.value)
-
-
-def test_valid_schedule_is_parsed():
-    data = ScheduleCreate(**schedule())
-    assert data.slot_duration == 30
-    assert data.start_time == dt.time(9)
-
-
-@pytest.mark.parametrize("duration", ["1", "240"])
-def test_duration_limits_are_inclusive(duration):
-    data = ScheduleCreate(**schedule(start_time="08:00", end_time="13:00", slot_duration=duration))
-    assert data.slot_duration == int(duration)
-
-
-@pytest.mark.parametrize(
-    ("overrides", "expected"),
-    [
-        ({"slot_duration": "0"}, "invalid_duration"),
-        ({"slot_duration": "-10"}, "invalid_duration"),
-        ({"slot_duration": "241"}, "invalid_duration"),
-        ({"slot_duration": "abc"}, "invalid_duration"),
-        ({"slot_duration": "12.5"}, "invalid_duration"),
-        ({"end_time": "09:00"}, "invalid_time_range"),
-        ({"end_time": "08:00"}, "invalid_time_range"),
-        ({"end_time": "09:20"}, "duration_too_long"),
-        ({"start_time": "25:00"}, "invalid_time"),
-        ({"date": "2020-01-01"}, "past_date"),
-        ({"date": "not-a-date"}, "invalid_date"),
-        ({"date": ""}, "invalid_date"),
-        ({"doctor_id": ""}, "doctor_not_found"),
-        ({"doctor_id": "0"}, "doctor_not_found"),
-    ],
-)
-def test_invalid_schedule_input(overrides, expected):
-    assert code_for(ScheduleCreate, **schedule(**overrides)) == expected
 
 
 def test_booking_name_is_normalised():
@@ -65,15 +19,12 @@ def test_booking_name_is_normalised():
 
 @pytest.mark.parametrize("name", ["", "   ", "x" * 101])
 def test_invalid_patient_name(name):
-    assert code_for(BookingCreate, patient_name=name, phone_number="0791234567") == "invalid_name"
+    assert code_for(patient_name=name, phone_number="0791234567") == "invalid_name"
 
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
-    [
-        ("079 123 4567", "0791234567"),
-        ("+962 (79) 123-4567", "+962791234567"),
-    ],
+    [("079 123 4567", "0791234567"), ("+962 (79) 123-4567", "+962791234567")],
 )
 def test_phone_is_normalised(raw, expected):
     assert BookingCreate(patient_name="Lina", phone_number=raw).phone_number == expected
@@ -81,160 +32,4 @@ def test_phone_is_normalised(raw, expected):
 
 @pytest.mark.parametrize("phone", ["", "123", "phone", "07912345abc", "1" * 16, "++962791234567"])
 def test_invalid_phone(phone):
-    assert code_for(BookingCreate, patient_name="Lina", phone_number=phone) == "invalid_phone"
-
-
-# --- Routes ---------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("overrides", "message"),
-    [
-        ({"slot_duration": "0"}, "between 1 and 240 minutes"),
-        ({"end_time": "08:00"}, "End time must be after start time"),
-        ({"date": "2020-01-01"}, "date in the past"),
-        ({"doctor_id": "999"}, "Please choose a doctor"),
-    ],
-)
-def test_generate_route_shows_validation_errors(client, overrides, message):
-    response = client.post("/generate-schedule", data=schedule(**overrides))
-
-    assert response.status_code == 200
-    assert message in response.text
-
-
-def test_generate_route_redirect_is_url_encoded(client):
-    response = client.post(
-        "/generate-schedule", data=schedule(doctor_id="1&error=x y"), follow_redirects=False
-    )
-    assert response.status_code == 303
-    assert response.headers["location"].startswith("/?doctor_id=1%26error%3Dx+y&")
-
-
-def test_empty_patient_name_is_rejected(client, db, doctor):
-    from app import services
-
-    day = dt.date.today() + dt.timedelta(days=3)
-    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(10), 30)
-    slot = services.list_slots(db, doctor.id, day)[0]
-
-    response = client.post(f"/book-slot/{slot.id}", data={"patient_name": "   ", "phone_number": "0791234567"})
-    assert "Please enter the patient's name" in response.text.replace("&#39;", "'")
-    db.refresh(slot)
-    assert not slot.is_booked
-
-
-def test_bad_query_params_fall_back_to_defaults(client):
-    assert client.get("/", params={"doctor_id": "abc", "date": "nope"}).status_code == 200
-
-
-def test_unknown_error_code_shows_generic_text(client):
-    response = client.get("/", params={"error": "<script>alert(1)</script>"})
-    assert "Something went wrong" in response.text
-    assert "<script>alert(1)</script>" not in response.text
-
-
-@pytest.mark.parametrize("day", ["0001-01-01", "9999-12-31"])
-def test_dates_at_the_edge_of_the_range_render(client, day):
-    response = client.get("/", params={"date": day, "doctor_id": "1"})
-    assert response.status_code == 200
-
-
-def test_day_navigation_links_keep_the_doctor(client):
-    response = client.get("/", params={"date": "2030-01-05", "doctor_id": "2"})
-    for day in ("2030-01-04", "2030-01-05", "2030-01-06"):
-        assert f'href="/?doctor_id=2&amp;date={day}"' in response.text
-
-
-def test_nav_labels_stay_available_to_screen_readers(client):
-    response = client.get("/")
-    # The mobile top bar shows icons only on small screens; each link keeps a screen-reader label.
-    assert '<span class="sr-only sm:hidden">Appointments</span>' in response.text
-    assert '<span class="sr-only sm:hidden">AI assistant</span>' in response.text
-    assert response.text.count('aria-current="page"') == 2  # sidebar and top bar both mark the page
-
-
-# --- Dashboard UI behaviour -------------------------------------------------------
-
-
-def test_first_doctor_is_selected_by_default(client):
-    response = client.get("/")
-    assert 'id="day-heading" class="text-sm font-semibold text-slate-900">Dr. Ali</h2>' in response.text
-
-
-def test_schedule_errors_reopen_the_schedule_form(client):
-    response = client.post("/generate-schedule", data=schedule(slot_duration="0"))
-    assert "data-open-on-load" in response.text
-    assert response.text.count("between 1 and 240 minutes") == 1  # shown in the form, not also as a toast
-
-
-def test_other_errors_are_shown_as_a_toast(client):
-    response = client.get("/", params={"error": "slot_not_found"})
-    assert "data-open-on-load" not in response.text
-    assert "data-toast" in response.text and "no longer exists" in response.text
-
-
-def test_past_slots_cannot_be_booked_from_the_dashboard(client, db, doctor, monkeypatch):
-    from app import services, templating
-
-    day = dt.date.today() + dt.timedelta(days=2)
-    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(10), 30)
-    later = dt.datetime.combine(day, dt.time(9, 15))
-    monkeypatch.setitem(templating.templates.env.globals, "clinic_now", lambda: later)
-
-    response = client.get("/", params={"doctor_id": doctor.id, "date": day.isoformat()})
-    assert response.text.count("Passed</span>") == 1  # 09:00 has started
-    assert response.text.count("Available</span>") == 1  # 09:30 can still be booked
-
-
-def test_cancelling_asks_for_confirmation(client, db, doctor):
-    from app import services
-
-    day = dt.date.today() + dt.timedelta(days=2)
-    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(10), 30)
-    slot = services.list_slots(db, doctor.id, day)[0]
-    services.book_slot(db, slot.id, "Lina Haddad", "0791234567")
-
-    response = client.get("/", params={"doctor_id": doctor.id, "date": day.isoformat()})
-    assert 'data-confirm="Cancel the 09:00 appointment for Lina Haddad?' in response.text
-
-
-def test_free_counts_exclude_slots_that_have_started(db, doctor, monkeypatch):
-    from app import services
-
-    day = dt.date.today() + dt.timedelta(days=2)
-    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(11), 30)
-    second = services.list_slots(db, doctor.id, day)[1]  # 09:30
-    services.book_slot(db, second.id, "Lina", "0791234567")
-    monkeypatch.setattr(services, "now", lambda: dt.datetime.combine(day, dt.time(10)))
-
-    # 09:00 passed, 09:30 booked, 10:00 started: only 10:30 can still be booked.
-    assert services.slot_counts_by_doctor(db, day)[doctor.id] == {"total": 4, "booked": 1, "free": 1}
-    assert services.slot_counts_by_doctor(db, day - dt.timedelta(days=1)) == {}
-
-
-def test_day_without_bookable_times_points_to_the_next_open_day(client, db, doctor, monkeypatch):
-    from app import services, templating
-
-    day = dt.date.today() + dt.timedelta(days=2)
-    later = day + dt.timedelta(days=3)
-    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(10), 30)
-    services.generate_slots(db, doctor.id, later, dt.time(9), dt.time(10), 30)
-    evening = dt.datetime.combine(day, dt.time(18))
-    monkeypatch.setattr(services, "now", lambda: evening)
-    monkeypatch.setitem(templating.templates.env.globals, "clinic_now", lambda: evening)
-
-    response = client.get("/", params={"doctor_id": doctor.id, "date": day.isoformat()})
-
-    assert "No times left to book on this day" in response.text
-    assert f'href="/?doctor_id={doctor.id}&amp;date={later.isoformat()}"' in response.text
-    assert f"Next available: {later.strftime('%a %d %b')}" in response.text
-
-
-def test_booking_hint_is_shown_when_times_are_open(client, db, doctor):
-    from app import services
-
-    day = dt.date.today() + dt.timedelta(days=2)
-    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(10), 30)
-    response = client.get("/", params={"doctor_id": doctor.id, "date": day.isoformat()})
-    assert "2 times are open." in response.text
+    assert code_for(patient_name="Lina", phone_number=phone) == "invalid_phone"

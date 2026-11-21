@@ -12,7 +12,10 @@ TEXTS = {
     "declined": "Okay, I haven't changed anything. How else can I help?",
     "confirm_user": "Yes, confirm.",
     "decline_user": "No, don't do it.",
-    "booked": "Your appointment is booked: {doctor} ({specialty}) on {date_label}, {start}-{end}.",
+    "booked": (
+        "Your appointment is booked: {doctor} ({specialty}) on {date_label}, {start}-{end}. "
+        "Your booking reference is {reference}."
+    ),
     "cancelled": "Your appointment with {doctor} on {date_label} at {start} has been cancelled.",
     # Shown when the Confirm button fails, keyed by service error code.
     "slot_already_booked": "Sorry, that time was just booked by someone else. Would you like me to find another time?",

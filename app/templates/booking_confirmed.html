@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+
+{% block title %}Appointment confirmed · ClinicBook{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl">
+    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="flex flex-col items-center px-6 pt-8 pb-6 text-center">
+            <span class="confirm-check inline-flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-teal-700 ring-1 ring-teal-600/20 ring-inset">{{ ui.icon("check-circle", "h-8 w-8") }}</span>
+            <h1 class="mt-4 text-xl font-semibold tracking-tight text-slate-900">Your appointment is booked</h1>
+            <p class="mt-1 text-sm text-slate-500">Please arrive 10 minutes early. Save your booking reference below.</p>
+        </div>
+
+        <dl class="divide-y divide-slate-100 border-t border-slate-100 text-sm">
+            <div class="flex items-center justify-between gap-4 px-6 py-3.5">
+                <dt class="text-slate-500">Booking reference</dt>
+                <dd class="rounded-md bg-slate-100 px-2.5 py-1 font-mono text-sm font-semibold tracking-wider text-slate-900">{{ slot.reference }}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-4 px-6 py-3.5">
+                <dt class="text-slate-500">Doctor</dt>
+                <dd class="text-right font-medium text-slate-900">{{ doctor.name }} <span class="font-normal text-slate-500">· {{ doctor.specialty }}</span></dd>
+            </div>
+            <div class="flex items-center justify-between gap-4 px-6 py-3.5">
+                <dt class="text-slate-500">Date</dt>
+                <dd class="font-medium text-slate-900">{{ slot.date.strftime('%A, %d %B %Y') }}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-4 px-6 py-3.5">
+                <dt class="text-slate-500">Time</dt>
+                <dd class="font-medium text-slate-900 tabular-nums">{{ slot.start_time.strftime('%H:%M') }} – {{ slot.end_time.strftime('%H:%M') }}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-4 px-6 py-3.5">
+                <dt class="text-slate-500">Patient</dt>
+                <dd class="text-right font-medium text-slate-900">{{ slot.patient_name }} <span class="font-normal text-slate-500 tabular-nums">· {{ masked_phone }}</span></dd>
+            </div>
+        </dl>
+
+        <div class="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:justify-between">
+            <a href="/appointments/{{ slot.reference }}/calendar.ics" class="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-xs ring-1 ring-slate-300 ring-inset transition hover:bg-slate-50">
+                {{ ui.icon("download", "h-4 w-4") }} Add to calendar
+            </a>
+            <a href="/" class="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-700 px-3.5 py-2 text-sm font-semibold text-white shadow-xs transition hover:bg-teal-800">
+                Book another appointment
+            </a>
+        </div>
+    </div>
+
+    <p class="mt-6 text-center text-sm text-slate-500">
+        Need to cancel? Go to <a href="/my-appointments" class="font-medium text-teal-700 hover:text-teal-800">My appointments</a> and enter the same name and phone number.
+    </p>
+</div>
+{% endblock %}

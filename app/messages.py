@@ -1,28 +1,23 @@
-"""User-facing text for the message codes passed in redirect URLs.
+"""Patient-facing text for message codes.
 
 Only codes are put in URLs; the text always comes from here, so a crafted
 link can't inject arbitrary content into the page.
 """
 
 ERRORS = {
-    "doctor_not_found": "Please choose a doctor from the list.",
-    "slot_not_found": "That time slot no longer exists. It may have been removed.",
-    "slot_already_booked": "Sorry, that slot has already been booked. Please pick another one.",
+    "doctor_not_found": "We couldn't find that doctor. Please choose one from the list.",
+    "slot_not_found": "That appointment time is no longer available. Please choose another time.",
+    "slot_taken": "Sorry, that time was just booked or has already started. Please choose another time.",
+    "slot_already_booked": "Sorry, that time was just booked. Please choose another time.",
+    "slot_in_past": "That time has already started. Please choose a later time.",
     "patient_already_booked": (
-        "This patient already has a booking with this doctor on that day, "
-        "or another booking at the same time."
+        "You already have an appointment with this doctor on that day, or another appointment at "
+        "the same time. You can manage it from My appointments."
     ),
-    "slot_not_booked": "That slot isn't booked, so there is nothing to cancel.",
-    "slot_in_past": "That slot has already started or passed and can no longer be booked.",
-    "invalid_duration": "Slot duration must be a whole number between 1 and 240 minutes.",
-    "invalid_time_range": "End time must be after start time.",
-    "duration_too_long": "The slot duration is longer than the time between start and end.",
-    "invalid_time": "Please enter valid start and end times.",
-    "invalid_date": "Please enter a valid date.",
-    "past_date": "You can't create a schedule for a date in the past.",
-    "invalid_name": "Please enter the patient's name (up to 100 characters).",
+    "booking_not_found": "We couldn't find that appointment. It may already have been cancelled.",
+    "invalid_name": "Please enter your full name (up to 100 characters).",
     "invalid_phone": "Please enter a valid phone number (7-15 digits, optionally starting with +).",
-    "invalid_input": "Some values were invalid. Please check the form and try again.",
+    "invalid_input": "Some details weren't valid. Please check the form and try again.",
 }
 
 GENERIC_ERROR = "Something went wrong. Please try again."
@@ -32,14 +27,3 @@ def error_message(code: str | None) -> str | None:
     if not code:
         return None
     return ERRORS.get(code, GENERIC_ERROR)
-
-
-def success_message(code: str | None, created: int = 0, skipped: int = 0) -> str | None:
-    if code == "generated":
-        if created == 0:
-            return f"No new slots were created: all {skipped} already exist."
-        text = f"Created {created} new slot{'s' if created != 1 else ''}."
-        if skipped:
-            text += f" Skipped {skipped} that already existed."
-        return text
-    return {"booked": "Appointment booked.", "cancelled": "Booking cancelled."}.get(code or "")

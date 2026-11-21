@@ -37,6 +37,8 @@ def _float(name: str, default: float) -> float:
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./clinic.db")
 CLINIC_TIMEZONE = os.getenv("CLINIC_TIMEZONE", "Asia/Amman")
+# Generate bookable slots from the doctors' working hours (app/clinic.py) automatically.
+AUTO_SCHEDULE = os.getenv("AUTO_SCHEDULE", "1").strip().lower() not in ("0", "false", "no")
 
 # --- AI assistant -----------------------------------------------------------
 # Local-first: Ollama is the default and needs no API key or internet connection.

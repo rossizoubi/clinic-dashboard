@@ -269,11 +269,8 @@
       const status = await response.json();
       statusDot.classList.remove("bg-slate-300", "bg-emerald-400", "bg-amber-400");
       statusDot.classList.add(status.ready ? "bg-emerald-400" : "bg-amber-400");
-      el("status-text").textContent = status.ready
-        ? `Online · ${status.provider}`
-        : status.provider
-          ? `Offline · ${status.provider}`
-          : "Not configured";
+      // Patients only need to know whether the assistant is available, not which model runs it.
+      el("status-text").textContent = status.ready ? "Online" : "Temporarily unavailable";
       if (!status.ready && status.message) {
         el("status-message").textContent = status.message;
         banner.classList.remove("hidden");

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+
+{% block title %}Book an appointment · ClinicBook{% endblock %}
+
+{% block toasts %}{% if error_message %}{{ ui.toast("error", error_message) }}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+        {{ ui.steps(1) }}
+        <h1 class="mt-5 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Book an appointment</h1>
+        <p class="mt-2 max-w-2xl text-sm text-slate-500 sm:text-base">Choose a doctor to see their available times. Booking takes less than a minute and needs only your name and phone number.</p>
+    </div>
+    <a href="/assistant" class="group flex max-w-sm items-center gap-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs transition hover:border-teal-300 hover:shadow-sm">
+        <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-700 ring-1 ring-teal-600/15 ring-inset">{{ ui.icon("sparkles", "h-[18px] w-[18px]") }}</span>
+        <span class="text-sm">
+            <span class="block font-medium text-slate-900">Not sure which doctor?</span>
+            <span class="block text-slate-500">Describe what you need to our booking assistant.</span>
+        </span>
+        {{ ui.icon("chevron-right", "ml-auto h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-teal-700") }}
+    </a>
+</div>
+
+<!-- Specialty filter -->
+<nav class="mt-8 flex flex-wrap gap-2" aria-label="Filter by specialty">
+    <a href="/" {% if not specialty %}aria-current="true"{% endif %}
+       class="rounded-full px-3.5 py-1.5 text-sm font-medium transition {{ 'bg-teal-700 text-white' if not specialty else 'bg-white text-slate-700 ring-1 ring-slate-200 ring-inset hover:bg-slate-50' }}">All specialties</a>
+    {% for name in specialties %}
+    {% set tag = SPECIALTY_TAGS.get(name, DEFAULT_TAG) %}
+    <a href="/?specialty={{ name | urlencode }}" {% if specialty == name %}aria-current="true"{% endif %}
+       class="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition {{ 'bg-teal-700 text-white' if specialty == name else 'bg-white text-slate-700 ring-1 ring-slate-200 ring-inset hover:bg-slate-50' }}">
+        <span class="h-1.5 w-1.5 rounded-full {{ 'bg-white' if specialty == name else tag.dot }}" aria-hidden="true"></span>{{ name }}
+    </a>
+    {% endfor %}
+</nav>
+
+<!-- Doctors -->
+<ul class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {% for card in cards %}
+    {% set doc = card.doctor %}
+    {% set tag = SPECIALTY_TAGS.get(doc.specialty, DEFAULT_TAG) %}
+    <li>
+        <a href="/doctors/{{ doc.id }}" class="group flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-xs transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700">
+            <div class="flex items-center gap-3">
+                {{ ui.doctor_avatar(doc, "h-12 w-12 text-base") }}
+                <div class="min-w-0">
+                    <h2 class="truncate text-base font-semibold text-slate-900">{{ doc.name }}</h2>
+                    <p class="flex items-center gap-1.5 text-sm text-slate-500"><span class="h-1.5 w-1.5 rounded-full {{ tag.dot }}" aria-hidden="true"></span>{{ doc.specialty }}</p>
+                </div>
+            </div>
+
+            <dl class="mt-5 space-y-2 text-sm">
+                <div class="flex gap-2.5">
+                    <dt class="sr-only">Working hours</dt>
+                    {{ ui.icon("clock", "mt-0.5 h-4 w-4 shrink-0 text-slate-400") }}
+                    <dd class="text-slate-600">
+                        {% for hours in card.hours %}<span class="block">{{ hours.label() }}</span>{% else %}<span class="block">Hours to be announced</span>{% endfor %}
+                    </dd>
+                </div>
+                <div class="flex gap-2.5">
+                    <dt class="sr-only">Next available</dt>
+                    {{ ui.icon("calendar", "mt-0.5 h-4 w-4 shrink-0 text-slate-400") }}
+                    <dd class="text-slate-600">
+                        {% if card.next_slot %}
+                        Next available: <span class="font-medium text-slate-900">{{ card.next_slot.date.strftime('%a %d %b') }}, {{ card.next_slot.start_time.strftime('%H:%M') }}</span>
+                        {% else %}
+                        <span class="text-slate-500">No free times in the next two weeks</span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+
+            <span class="mt-auto inline-flex items-center gap-1.5 pt-5 text-sm font-semibold text-teal-700">
+                Choose a time {{ ui.icon("chevron-right", "h-4 w-4 transition group-hover:translate-x-0.5") }}
+            </span>
+        </a>
+    </li>
+    {% else %}
+    <li class="col-span-full rounded-xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center text-sm text-slate-500">No doctors match this specialty.</li>
+    {% endfor %}
+</ul>
+
+<p class="mt-8 text-sm text-slate-500">
+    Already booked? <a href="/my-appointments" class="font-medium text-teal-700 hover:text-teal-800">View or cancel your appointment</a>.
+</p>
+{% endblock %}

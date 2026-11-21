@@ -1,19 +1,14 @@
-"""Input validation for form submissions.
+"""Input validation for the booking forms.
 
-Custom checks raise PydanticCustomError with a short code (e.g. "past_date"),
+Custom checks raise PydanticCustomError with a short code (e.g. "invalid_phone"),
 so routes can turn any ValidationError into a message code with `error_code()`.
 """
 
-import datetime as dt
 import re
 
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ValidationError, field_validator
 from pydantic_core import PydanticCustomError
 
-from app.clock import today
-
-MIN_SLOT_MINUTES = 1
-MAX_SLOT_MINUTES = 240
 MAX_NAME_LENGTH = 100
 
 
@@ -35,31 +30,6 @@ def normalize_phone(value: str) -> str:
     return ("+" if has_plus else "") + digits
 
 
-class ScheduleCreate(BaseModel):
-    doctor_id: int = Field(gt=0)
-    date: dt.date
-    start_time: dt.time
-    end_time: dt.time
-    slot_duration: int = Field(ge=MIN_SLOT_MINUTES, le=MAX_SLOT_MINUTES)
-
-    @field_validator("date")
-    @classmethod
-    def date_not_in_past(cls, value: dt.date) -> dt.date:
-        if value < today():
-            raise PydanticCustomError("past_date", "Date can't be in the past")
-        return value
-
-    @model_validator(mode="after")
-    def check_time_range(self) -> "ScheduleCreate":
-        if self.end_time <= self.start_time:
-            raise PydanticCustomError("invalid_time_range", "End time must be after start time")
-        start = dt.datetime.combine(self.date, self.start_time)
-        end = dt.datetime.combine(self.date, self.end_time)
-        if end - start < dt.timedelta(minutes=self.slot_duration):
-            raise PydanticCustomError("duration_too_long", "Slot duration is longer than the time range")
-        return self
-
-
 class BookingCreate(BaseModel):
     patient_name: str
     phone_number: str
@@ -75,16 +45,8 @@ class BookingCreate(BaseModel):
         return normalize_phone(value)
 
 
-_CUSTOM_CODES = {"past_date", "invalid_time_range", "duration_too_long", "invalid_name", "invalid_phone"}
-_FIELD_CODES = {
-    "doctor_id": "doctor_not_found",
-    "date": "invalid_date",
-    "start_time": "invalid_time",
-    "end_time": "invalid_time",
-    "slot_duration": "invalid_duration",
-    "patient_name": "invalid_name",
-    "phone_number": "invalid_phone",
-}
+_CUSTOM_CODES = {"invalid_name", "invalid_phone"}
+_FIELD_CODES = {"patient_name": "invalid_name", "phone_number": "invalid_phone"}
 
 
 def error_code(exc: ValidationError) -> str:

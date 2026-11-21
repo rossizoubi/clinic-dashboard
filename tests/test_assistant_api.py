@@ -32,7 +32,8 @@ def test_page_renders_without_api_key_or_model(client):
     response = client.get("/assistant")
     assert response.status_code == 200
     assert 'id="chat-form"' in response.text
-    assert "ollama · qwen2.5:7b" in response.text
+    assert "Book with our assistant" in response.text
+    assert "qwen2.5" not in response.text  # patients don't need to see which model runs it
     assert "patient data never leaves this machine" in response.text
 
 

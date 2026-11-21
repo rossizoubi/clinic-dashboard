@@ -101,34 +101,3 @@ def test_cancel_missing_slot(db):
 
 
 # --- Routes ---------------------------------------------------------------
-
-
-def test_book_and_cancel_through_routes(client, slots):
-    booked = client.post(f"/book-slot/{slots[0].id}", data={"patient_name": "  Lina   Haddad ", "phone_number": "079 123 4567"})
-    assert "Appointment booked." in booked.text
-    assert "Lina Haddad" in booked.text
-
-    cancelled = client.post(f"/cancel-slot/{slots[0].id}")
-    assert "Booking cancelled." in cancelled.text
-    assert "Lina Haddad" not in cancelled.text
-
-
-def test_double_booking_route_shows_error_and_keeps_data(client, slots):
-    client.post(f"/book-slot/{slots[0].id}", data={"patient_name": "Lina", "phone_number": PHONE})
-    response = client.post(f"/book-slot/{slots[0].id}", data={"patient_name": "Omar", "phone_number": OTHER_PHONE})
-
-    assert "already been booked" in response.text
-    assert response.text.count("Booked</span>") == 1
-    assert response.text.count("Available</span>") == len(slots) - 1
-
-
-def test_route_errors_for_missing_slots(client):
-    assert "no longer exists" in client.post("/book-slot/999", data={"patient_name": "Lina", "phone_number": PHONE}).text
-    assert "no longer exists" in client.post("/cancel-slot/999").text
-
-
-def test_failed_actions_do_not_wipe_appointments(client, db, slots, doctor, future_day):
-    client.post("/book-slot/999", data={"patient_name": "Lina", "phone_number": PHONE})
-    client.post("/cancel-slot/999")
-
-    assert len(services.list_slots(db, doctor.id, future_day)) == len(slots)

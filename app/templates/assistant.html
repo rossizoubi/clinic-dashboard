@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% import "_ui.html" as ui %}
 
-{% block title %}AI assistant · ClinicBook{% endblock %}
+{% block title %}Book with our assistant · ClinicBook{% endblock %}
 
 {% block content %}
 {% set card = "rounded-xl border border-slate-200 bg-white shadow-xs" %}
@@ -9,21 +9,12 @@
 <!-- Page header -->
 <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
     <div>
-        <h1 class="text-2xl font-semibold tracking-tight text-slate-900">AI booking assistant</h1>
-        <p class="mt-1 max-w-2xl text-sm text-slate-500">Patients describe what they need in plain English. The assistant checks live availability and always asks for confirmation before booking or cancelling.</p>
+        <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Book with our assistant</h1>
+        <p class="mt-2 max-w-2xl text-sm text-slate-500 sm:text-base">Tell the assistant what you need in plain English. It shows you real available times and books only after you confirm.</p>
     </div>
-    {% if provider_label %}
-    <div class="flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-xs ring-1 ring-slate-200 ring-inset">
-            {{ ui.icon("cpu", "h-3.5 w-3.5 text-slate-400") }} {{ provider_label }}
-        </span>
-        {% if is_local %}
-        <span class="inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-800 ring-1 ring-teal-600/20 ring-inset">
-            {{ ui.icon("lock", "h-3.5 w-3.5") }} On-premise
-        </span>
-        {% endif %}
-    </div>
-    {% endif %}
+    <a href="/" class="inline-flex items-center gap-1.5 self-start rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-xs ring-1 ring-slate-300 ring-inset transition hover:bg-slate-50 md:self-auto">
+        {{ ui.icon("calendar", "h-4 w-4 text-slate-400") }} Prefer to pick a time yourself?
+    </a>
 </div>
 
 <div id="status-banner" role="status" class="mt-6 hidden items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -129,7 +120,7 @@
                 {{ ui.icon("lock", "mt-0.5 h-5 w-5 shrink-0 text-teal-700") }}
                 <div>
                     <h2 class="text-sm font-semibold text-slate-900">Private by design</h2>
-                    <p class="mt-1 text-sm text-slate-500">Runs on a local model: patient data never leaves this machine. No external API, no per-message cost.</p>
+                    <p class="mt-1 text-sm text-slate-500">The assistant runs on the clinic's own system: patient data never leaves this machine and is not shared with outside services.</p>
                 </div>
             </div>
             {% endif %}

@@ -5,6 +5,7 @@ booking rule lives in one place. Failures raise a ServiceError subclass whose `c
 the UI maps to a message.
 """
 
+import secrets
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
@@ -88,8 +89,7 @@ def generate_slots(
     Slots that would overlap an existing slot for the same doctor and day are skipped,
     so generating the same schedule twice never creates duplicates.
     """
-    # Routes validate input with schemas.ScheduleCreate; this guard keeps direct callers
-    # from ever starting an endless loop.
+    # Hours come from app/clinic.py; this guard keeps a bad entry from ever starting an endless loop.
     if duration_minutes < 1 or end <= start:
         raise InvalidSchedule()
     get_doctor(db, doctor_id)
@@ -122,29 +122,31 @@ def list_slots(db: Session, doctor_id: int, day: date) -> list[Appointment]:
     return list(db.scalars(query))
 
 
-def slot_counts_by_doctor(db: Session, day: date) -> dict[int, dict[str, int]]:
-    """Total, booked and free slot counts per doctor for one day, in a single query.
-
-    "Free" means still bookable: not booked and not started yet.
-    """
+def free_slots_by_day(db: Session, doctor_id: int, start: date, days: int) -> dict[date, int]:
+    """How many bookable slots a doctor has on each of the next `days` days (missing = none)."""
     current = now()
-    if day < current.date():
-        bookable = false()
-    elif day == current.date():
-        bookable = Appointment.is_booked.is_(False) & (Appointment.start_time > current.time())
-    else:
-        bookable = Appointment.is_booked.is_(False)
-    free = func.sum(case((bookable, 1), else_=0))
-    booked = func.sum(case((Appointment.is_booked.is_(True), 1), else_=0))
-    query = (
-        select(Appointment.doctor_id, func.count(Appointment.id), booked, free)
-        .where(Appointment.date == day)
-        .group_by(Appointment.doctor_id)
+    query = select(Appointment.date, Appointment.start_time).where(
+        Appointment.doctor_id == doctor_id,
+        Appointment.is_booked.is_(False),
+        Appointment.date >= start,
+        Appointment.date < start + timedelta(days=days),
     )
-    return {
-        doctor_id: {"total": total, "booked": booked_count or 0, "free": free_count or 0}
-        for doctor_id, total, booked_count, free_count in db.execute(query)
-    }
+    counts: dict[date, int] = {}
+    for day, start_time in db.execute(query):
+        if datetime.combine(day, start_time) > current:
+            counts[day] = counts.get(day, 0) + 1
+    return counts
+
+
+def next_free_slot(db: Session, doctor_id: int) -> Appointment | None:
+    """The doctor's earliest bookable slot, if any."""
+    current = now()
+    query = (
+        select(Appointment)
+        .where(Appointment.doctor_id == doctor_id, Appointment.is_booked.is_(False), Appointment.date >= current.date())
+        .order_by(Appointment.date, Appointment.start_time)
+    )
+    return next((s for s in db.scalars(query) if datetime.combine(s.date, s.start_time) > current), None)
 
 
 def list_available_slots(
@@ -244,7 +246,7 @@ def book_slot(db: Session, slot_id: int, patient_name: str, phone_number: str) -
     result = db.execute(
         update(Appointment)
         .where(Appointment.id == slot_id, Appointment.is_booked.is_(False))
-        .values(is_booked=True, patient_name=patient_name, phone_number=phone_number)
+        .values(is_booked=True, patient_name=patient_name, phone_number=phone_number, reference=new_reference())
     )
     if result.rowcount == 0:
         db.rollback()
@@ -254,14 +256,35 @@ def book_slot(db: Session, slot_id: int, patient_name: str, phone_number: str) -
     return slot
 
 
+_REFERENCE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O or 1/I, easy to read out
+
+
+def new_reference() -> str:
+    """A short, unguessable booking reference such as 'K7MX-Q2PD'."""
+    code = "".join(secrets.choice(_REFERENCE_ALPHABET) for _ in range(8))
+    return f"{code[:4]}-{code[4:]}"
+
+
+def get_booking_by_reference(db: Session, reference: str) -> Appointment:
+    slot = db.scalar(
+        select(Appointment)
+        .options(joinedload(Appointment.doctor))
+        .where(Appointment.reference == reference.strip().upper(), Appointment.is_booked.is_(True))
+    )
+    if slot is None:
+        raise BookingNotFound()
+    return slot
+
+
 def cancel_booking(db: Session, slot_id: int) -> Appointment:
-    """Staff cancellation from the dashboard."""
+    """Free a booked slot. Patients go through cancel_patient_booking, which checks who they are."""
     slot = get_slot(db, slot_id)
     if not slot.is_booked:
         raise SlotNotBooked()
     slot.is_booked = False
     slot.patient_name = None
     slot.phone_number = None
+    slot.reference = None
     db.commit()
     return slot
 

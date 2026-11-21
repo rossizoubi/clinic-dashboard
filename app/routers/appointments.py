@@ -82,7 +82,15 @@ async def view_appointments(
 
     # Per-doctor totals for the selected day, shown on the doctor cards and the summary banner.
     counts = services.slot_counts_by_doctor(db, selected_date)
-    day_stats = {d.id: counts.get(d.id, {"total": 0, "free": 0}) for d in doctors}
+    day_stats = {d.id: counts.get(d.id, {"total": 0, "booked": 0, "free": 0}) for d in doctors}
+
+    # When nothing on this day can be booked any more, point to the doctor's next day with free slots.
+    next_open_url = next_open_date = None
+    if selected_doctor and not day_stats[selected_doctor.id]["free"]:
+        upcoming = services.next_available_dates(db, selected_doctor.id, max(selected_date, current_day - dt.timedelta(days=1)), limit=1)
+        if upcoming:
+            next_open_date = upcoming[0]
+            next_open_url = home_url(doctor_id=selected_doctor.id, date=next_open_date)
 
     prev_date, next_date = _shift(selected_date, -1), _shift(selected_date, 1)
 
@@ -91,12 +99,15 @@ async def view_appointments(
         name="home.html",
         context={
             "appointments": appointments,
+            "next_open_date": next_open_date,
+            "next_open_url": next_open_url,
             "doctors": doctors,
             "selected_doctor": selected_doctor,
             "selected_date": selected_date,
             "today": current_day,
             "day_stats": day_stats,
             "day_total": sum(s["total"] for s in day_stats.values()),
+            "day_booked": sum(s["booked"] for s in day_stats.values()),
             "day_free": sum(s["free"] for s in day_stats.values()),
             "doctor_urls": {d.id: home_url(doctor_id=d.id, date=selected_date) for d in doctors},
             "prev_url": home_url(doctor_id=doctor_param, date=prev_date) if prev_date else None,

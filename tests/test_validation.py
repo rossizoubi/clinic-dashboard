@@ -197,3 +197,44 @@ def test_cancelling_asks_for_confirmation(client, db, doctor):
 
     response = client.get("/", params={"doctor_id": doctor.id, "date": day.isoformat()})
     assert 'data-confirm="Cancel the 09:00 appointment for Lina Haddad?' in response.text
+
+
+def test_free_counts_exclude_slots_that_have_started(db, doctor, monkeypatch):
+    from app import services
+
+    day = dt.date.today() + dt.timedelta(days=2)
+    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(11), 30)
+    second = services.list_slots(db, doctor.id, day)[1]  # 09:30
+    services.book_slot(db, second.id, "Lina", "0791234567")
+    monkeypatch.setattr(services, "now", lambda: dt.datetime.combine(day, dt.time(10)))
+
+    # 09:00 passed, 09:30 booked, 10:00 started: only 10:30 can still be booked.
+    assert services.slot_counts_by_doctor(db, day)[doctor.id] == {"total": 4, "booked": 1, "free": 1}
+    assert services.slot_counts_by_doctor(db, day - dt.timedelta(days=1)) == {}
+
+
+def test_day_without_bookable_times_points_to_the_next_open_day(client, db, doctor, monkeypatch):
+    from app import services, templating
+
+    day = dt.date.today() + dt.timedelta(days=2)
+    later = day + dt.timedelta(days=3)
+    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(10), 30)
+    services.generate_slots(db, doctor.id, later, dt.time(9), dt.time(10), 30)
+    evening = dt.datetime.combine(day, dt.time(18))
+    monkeypatch.setattr(services, "now", lambda: evening)
+    monkeypatch.setitem(templating.templates.env.globals, "clinic_now", lambda: evening)
+
+    response = client.get("/", params={"doctor_id": doctor.id, "date": day.isoformat()})
+
+    assert "No times left to book on this day" in response.text
+    assert f'href="/?doctor_id={doctor.id}&amp;date={later.isoformat()}"' in response.text
+    assert f"Next available: {later.strftime('%a %d %b')}" in response.text
+
+
+def test_booking_hint_is_shown_when_times_are_open(client, db, doctor):
+    from app import services
+
+    day = dt.date.today() + dt.timedelta(days=2)
+    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(10), 30)
+    response = client.get("/", params={"doctor_id": doctor.id, "date": day.isoformat()})
+    assert "2 times are open." in response.text

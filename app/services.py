@@ -8,7 +8,7 @@ the UI maps to a message.
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, false, func, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.clock import now
@@ -123,14 +123,28 @@ def list_slots(db: Session, doctor_id: int, day: date) -> list[Appointment]:
 
 
 def slot_counts_by_doctor(db: Session, day: date) -> dict[int, dict[str, int]]:
-    """Total and free (unbooked) slot counts per doctor for one day, in a single query."""
-    free = func.sum(case((Appointment.is_booked.is_(False), 1), else_=0))
+    """Total, booked and free slot counts per doctor for one day, in a single query.
+
+    "Free" means still bookable: not booked and not started yet.
+    """
+    current = now()
+    if day < current.date():
+        bookable = false()
+    elif day == current.date():
+        bookable = Appointment.is_booked.is_(False) & (Appointment.start_time > current.time())
+    else:
+        bookable = Appointment.is_booked.is_(False)
+    free = func.sum(case((bookable, 1), else_=0))
+    booked = func.sum(case((Appointment.is_booked.is_(True), 1), else_=0))
     query = (
-        select(Appointment.doctor_id, func.count(Appointment.id), free)
+        select(Appointment.doctor_id, func.count(Appointment.id), booked, free)
         .where(Appointment.date == day)
         .group_by(Appointment.doctor_id)
     )
-    return {doctor_id: {"total": total, "free": free_count or 0} for doctor_id, total, free_count in db.execute(query)}
+    return {
+        doctor_id: {"total": total, "booked": booked_count or 0, "free": free_count or 0}
+        for doctor_id, total, booked_count, free_count in db.execute(query)
+    }
 
 
 def list_available_slots(

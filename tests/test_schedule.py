@@ -106,5 +106,8 @@ def test_slot_counts_by_doctor(db, doctor, other_doctor, future_day):
 
     counts = services.slot_counts_by_doctor(db, future_day)
 
-    assert counts == {doctor.id: {"total": 4, "free": 3}, other_doctor.id: {"total": 2, "free": 2}}
+    assert counts == {
+        doctor.id: {"total": 4, "booked": 1, "free": 3},
+        other_doctor.id: {"total": 2, "booked": 0, "free": 2},
+    }
     assert services.slot_counts_by_doctor(db, future_day + dt.timedelta(days=1)) == {}

@@ -4,22 +4,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" class="{{ cls }}" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="{{ ICON_PATHS[name] }}"/></svg>
 {%- endmacro %}
 
-{% macro doctor_avatar(doctor, size="h-11 w-11 text-base") -%}
-{% set t = SPECIALTY_THEMES.get(doctor.specialty, DEFAULT_THEME) %}
-{% set initial = doctor.name.replace("Dr. ", "")[:1] | upper %}
-<span class="inline-flex {{ size }} shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br {{ t.avatar }} font-bold text-white shadow-md shadow-slate-900/10">{{ initial }}</span>
+{% macro doctor_avatar(doctor, size="h-10 w-10 text-sm") -%}
+{% set tag = SPECIALTY_TAGS.get(doctor.specialty, DEFAULT_TAG) %}
+{% set initials = doctor.name.replace("Dr. ", "")[:2] %}
+<span class="inline-flex {{ size }} shrink-0 items-center justify-center rounded-full font-semibold ring-1 ring-inset {{ tag.avatar }}" aria-hidden="true">{{ initials }}</span>
 {%- endmacro %}
 
-{% macro alert(kind, text) -%}
-{% if kind == "error" %}
-<div role="alert" class="animate-pop mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-white px-4 py-3.5 text-sm text-red-800 shadow-lg shadow-red-500/10">
-    <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">{{ icon("alert", "h-5 w-5") }}</span>
-    <p class="pt-1.5">{{ text }}</p>
+{# A notification that slides in at the top right and can be dismissed. #}
+{% macro toast(kind, text) -%}
+{% set error = kind == "error" %}
+<div data-toast role="{{ 'alert' if error else 'status' }}"
+     class="toast pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border bg-white p-4 shadow-lg shadow-slate-900/10 {{ 'border-rose-200' if error else 'border-slate-200' }}">
+    <span class="mt-0.5 shrink-0 {{ 'text-rose-600' if error else 'text-teal-600' }}">{{ icon("alert" if error else "check-circle", "h-5 w-5") }}</span>
+    <div class="min-w-0 flex-1">
+        <p class="text-sm font-semibold text-slate-900">{{ "Something needs attention" if error else "Done" }}</p>
+        <p class="mt-0.5 text-sm text-slate-600">{{ text }}</p>
+    </div>
+    <button type="button" data-dismiss-toast class="-m-1 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Dismiss">
+        {{ icon("x-mark", "h-4 w-4") }}
+    </button>
 </div>
-{% else %}
-<div role="status" class="animate-pop mb-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-white px-4 py-3.5 text-sm text-emerald-800 shadow-lg shadow-emerald-500/10">
-    <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">{{ icon("check-circle", "h-5 w-5") }}</span>
-    <p class="pt-1.5 font-medium">{{ text }}</p>
-</div>
-{% endif %}
 {%- endmacro %}

@@ -148,5 +148,52 @@ def test_day_navigation_links_keep_the_doctor(client):
 
 def test_nav_labels_stay_available_to_screen_readers(client):
     response = client.get("/")
-    assert '<span class="sr-only sm:not-sr-only">Dashboard</span>' in response.text
-    assert '<span class="sr-only sm:not-sr-only">AI Assistant</span>' in response.text
+    # The mobile top bar shows icons only on small screens; each link keeps a screen-reader label.
+    assert '<span class="sr-only sm:hidden">Appointments</span>' in response.text
+    assert '<span class="sr-only sm:hidden">AI assistant</span>' in response.text
+    assert response.text.count('aria-current="page"') == 2  # sidebar and top bar both mark the page
+
+
+# --- Dashboard UI behaviour -------------------------------------------------------
+
+
+def test_first_doctor_is_selected_by_default(client):
+    response = client.get("/")
+    assert 'id="day-heading" class="text-sm font-semibold text-slate-900">Dr. Ali</h2>' in response.text
+
+
+def test_schedule_errors_reopen_the_schedule_form(client):
+    response = client.post("/generate-schedule", data=schedule(slot_duration="0"))
+    assert "data-open-on-load" in response.text
+    assert response.text.count("between 1 and 240 minutes") == 1  # shown in the form, not also as a toast
+
+
+def test_other_errors_are_shown_as_a_toast(client):
+    response = client.get("/", params={"error": "slot_not_found"})
+    assert "data-open-on-load" not in response.text
+    assert "data-toast" in response.text and "no longer exists" in response.text
+
+
+def test_past_slots_cannot_be_booked_from_the_dashboard(client, db, doctor, monkeypatch):
+    from app import services, templating
+
+    day = dt.date.today() + dt.timedelta(days=2)
+    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(10), 30)
+    later = dt.datetime.combine(day, dt.time(9, 15))
+    monkeypatch.setitem(templating.templates.env.globals, "clinic_now", lambda: later)
+
+    response = client.get("/", params={"doctor_id": doctor.id, "date": day.isoformat()})
+    assert response.text.count("Passed</span>") == 1  # 09:00 has started
+    assert response.text.count("Available</span>") == 1  # 09:30 can still be booked
+
+
+def test_cancelling_asks_for_confirmation(client, db, doctor):
+    from app import services
+
+    day = dt.date.today() + dt.timedelta(days=2)
+    services.generate_slots(db, doctor.id, day, dt.time(9), dt.time(10), 30)
+    slot = services.list_slots(db, doctor.id, day)[0]
+    services.book_slot(db, slot.id, "Lina Haddad", "0791234567")
+
+    response = client.get("/", params={"doctor_id": doctor.id, "date": day.isoformat()})
+    assert 'data-confirm="Cancel the 09:00 appointment for Lina Haddad?' in response.text

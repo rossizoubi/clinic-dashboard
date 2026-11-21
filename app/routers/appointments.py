@@ -14,6 +14,18 @@ from app.templating import templates
 
 router = APIRouter()
 
+# Error codes that come from the "New schedule" form; the page reopens that form when one occurs.
+SCHEDULE_FORM_ERRORS = {
+    "invalid_duration",
+    "invalid_time_range",
+    "duration_too_long",
+    "invalid_time",
+    "invalid_date",
+    "past_date",
+    "doctor_not_found",
+    "invalid_input",
+}
+
 
 def home_url(**params) -> str:
     """Build a URL for the dashboard with properly encoded query parameters."""
@@ -63,7 +75,8 @@ async def view_appointments(
     selected_date = _parse_date(date) or current_day
     selected_id = _parse_int(doctor_id)
     doctors = services.list_doctors(db)
-    selected_doctor = next((d for d in doctors if d.id == selected_id), None)
+    # Default to the first doctor so the page always opens on a real schedule.
+    selected_doctor = next((d for d in doctors if d.id == selected_id), doctors[0] if doctors else None)
     doctor_param = selected_doctor.id if selected_doctor else None
     appointments = services.list_slots(db, selected_doctor.id, selected_date) if selected_doctor else []
 
@@ -89,6 +102,7 @@ async def view_appointments(
             "prev_url": home_url(doctor_id=doctor_param, date=prev_date) if prev_date else None,
             "next_url": home_url(doctor_id=doctor_param, date=next_date) if next_date else None,
             "today_url": home_url(doctor_id=doctor_param, date=current_day) if selected_date != current_day else None,
+            "open_schedule_form": error in SCHEDULE_FORM_ERRORS,
             "error_message": messages.error_message(error),
             "success_message": messages.success_message(
                 success, _parse_int(created) or 0, _parse_int(skipped) or 0

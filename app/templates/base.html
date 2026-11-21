@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="ClinicBook: clinic appointment booking with a local AI assistant.">
+    <meta name="description" content="ClinicBook: clinic appointment scheduling with a private, on-premise AI booking assistant.">
+    <meta name="theme-color" content="#0f766e">
     <title>{% block title %}ClinicBook{% endblock %}</title>
     <link rel="icon" href="{{ url_for('static', path='img/logo.svg') }}" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,41 +13,73 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11"></script>
     <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+    {# Prefetch pages when a link is hovered, so navigation feels instant (supported browsers only). #}
+    <script type="speculationrules">{"prefetch": [{"where": {"href_matches": "/*"}, "eagerness": "moderate"}]}</script>
 </head>
-<body class="relative flex min-h-full flex-col bg-slate-50 text-slate-800 antialiased">
-    <div class="page-glow pointer-events-none absolute inset-x-0 top-0 -z-0 h-[32rem]" aria-hidden="true"></div>
-    {% set path = request.url.path %}
-    <header class="sticky top-0 z-20 border-b border-white/60 bg-white/70 shadow-sm shadow-slate-900/5 backdrop-blur-lg">
-        <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-            <a href="/" class="flex items-center gap-3">
-                <img src="{{ url_for('static', path='img/logo.svg') }}" alt="" class="h-9 w-9">
-                <span class="leading-tight">
-                    <span class="block text-base font-semibold tracking-tight text-slate-900">ClinicBook</span>
-                    <span class="hidden text-xs text-slate-500 sm:block">Appointments &amp; AI booking</span>
-                </span>
+{% set path = request.url.path %}
+{% set nav = [("/", "Appointments", "calendar"), ("/assistant", "AI assistant", "sparkles")] %}
+<body class="h-full bg-slate-50 text-slate-900 antialiased">
+    <a href="#main" class="sr-only z-50 rounded-lg bg-white px-4 py-2 text-sm font-medium shadow focus:not-sr-only focus:fixed focus:top-3 focus:left-3">Skip to content</a>
+
+    <!-- Sidebar (desktop) -->
+    <aside class="sidebar fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex" aria-label="Sidebar">
+        <a href="/" class="flex h-16 items-center gap-3 border-b border-slate-100 px-6">
+            <img src="{{ url_for('static', path='img/logo.svg') }}" alt="" class="h-8 w-8">
+            <span class="leading-tight">
+                <span class="block text-[15px] font-semibold tracking-tight text-slate-900">ClinicBook</span>
+                <span class="block text-xs text-slate-500">Practice scheduling</span>
+            </span>
+        </a>
+        <nav class="flex-1 space-y-1 px-3 py-5" aria-label="Main">
+            <p class="px-3 pb-2 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Workspace</p>
+            {% for href, label, icon_name in nav %}
+            {% set active = path == href %}
+            <a href="{{ href }}" {% if active %}aria-current="page"{% endif %}
+               class="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors {{ 'bg-teal-50 text-teal-800' if active else 'text-slate-600 hover:bg-slate-50 hover:text-slate-900' }}">
+                {{ ui.icon(icon_name, "h-5 w-5 " ~ ('text-teal-700' if active else 'text-slate-400 group-hover:text-slate-600')) }}
+                {{ label }}
             </a>
-            <nav class="flex items-center gap-1 text-sm" aria-label="Main">
-                {% for href, label, icon_name in [("/", "Dashboard", "grid"), ("/assistant", "AI Assistant", "sparkles")] %}
-                <a href="{{ href }}" {% if path == href %}aria-current="page"{% endif %}
-                   class="inline-flex items-center gap-2 rounded-lg px-3 py-2 font-medium transition {{ 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/25' if path == href else 'text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm' }}">
-                    {{ ui.icon(icon_name, "h-5 w-5") }}
-                    <span class="sr-only sm:not-sr-only">{{ label }}</span>
-                </a>
-                {% endfor %}
-            </nav>
+            {% endfor %}
+        </nav>
+        <div class="m-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p class="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Clinic day</p>
+            <p class="mt-1 text-sm font-semibold text-slate-900">{{ clinic_today().strftime('%A, %d %B') }}</p>
+            <p class="mt-0.5 text-xs text-slate-500">Time zone: {{ CLINIC_TIMEZONE }}</p>
         </div>
+    </aside>
+
+    <!-- Top bar (mobile and tablet) -->
+    <header class="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:hidden">
+        <a href="/" class="flex items-center gap-2.5">
+            <img src="{{ url_for('static', path='img/logo.svg') }}" alt="" class="h-7 w-7">
+            <span class="text-[15px] font-semibold tracking-tight">ClinicBook</span>
+        </a>
+        <nav class="flex items-center gap-1" aria-label="Main">
+            {% for href, label, icon_name in nav %}
+            {% set active = path == href %}
+            <a href="{{ href }}" {% if active %}aria-current="page"{% endif %}
+               class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors {{ 'bg-teal-50 text-teal-800' if active else 'text-slate-600 hover:bg-slate-100' }}">
+                {{ ui.icon(icon_name, "h-4 w-4") }}<span class="hidden sm:inline">{{ label }}</span><span class="sr-only sm:hidden">{{ label }}</span>
+            </a>
+            {% endfor %}
+        </nav>
     </header>
 
-    <main class="relative mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
-        {% block content %}{% endblock %}
-    </main>
+    <div class="lg:pl-64">
+        <main id="main" class="page mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
+            {% block content %}{% endblock %}
+        </main>
+        <footer class="mx-auto max-w-7xl px-4 pb-8 text-xs text-slate-400 sm:px-6 lg:px-10">
+            ClinicBook · A portfolio project · FastAPI, SQLAlchemy, Tailwind CSS, Ollama
+        </footer>
+    </div>
 
-    <footer class="relative border-t border-slate-200 bg-white/80">
-        <div class="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <p>&copy; ClinicBook. A portfolio project.</p>
-            <p>FastAPI · SQLAlchemy · Jinja2 · Tailwind CSS · Ollama</p>
-        </div>
-    </footer>
+    <!-- Notifications -->
+    <div class="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-end gap-3 sm:inset-x-auto sm:right-6 sm:bottom-6" aria-live="polite">
+        {% block toasts %}{% endblock %}
+    </div>
+
+    <script src="{{ url_for('static', path='js/app.js') }}" defer></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

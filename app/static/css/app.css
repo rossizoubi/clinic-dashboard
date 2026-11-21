@@ -1,69 +1,159 @@
-/* Small global styles. Layout and components use Tailwind utility classes in the templates. */
+/* Global styles. Layout and components use Tailwind utility classes in the templates;
+   this file holds what utilities can't express: motion, native-element styling and states. */
+
+:root {
+    interpolate-size: allow-keywords; /* lets <details> animate to height: auto */
+    --brand: #0f766e;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
 
 body {
     font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-feature-settings: "cv11", "ss01";
 }
 
-/* Soft coloured glow behind the page content. */
-.page-glow {
-    background:
-        radial-gradient(40rem 22rem at 12% -6rem, rgba(99, 102, 241, 0.16), transparent 70%),
-        radial-gradient(36rem 20rem at 88% -4rem, rgba(14, 165, 233, 0.14), transparent 70%),
-        radial-gradient(30rem 18rem at 50% 4rem, rgba(236, 72, 153, 0.07), transparent 70%);
+:focus-visible {
+    outline-color: var(--brand);
 }
 
-/* Decorative pattern on the hero banners. */
-.hero-pattern {
-    background-image: radial-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px);
-    background-size: 18px 18px;
+/* ---------- Page transitions (supported browsers; others navigate normally) ---------- */
+@view-transition {
+    navigation: auto;
+}
+.sidebar {
+    view-transition-name: sidebar; /* the sidebar stays put while the page changes */
+}
+.page {
+    view-transition-name: page;
+}
+::view-transition-old(page) {
+    animation: page-out 120ms ease-in both;
+}
+::view-transition-new(page) {
+    animation: page-in 220ms var(--ease-out) both;
+}
+@keyframes page-out {
+    to { opacity: 0; }
+}
+@keyframes page-in {
+    from { opacity: 0; transform: translateY(6px); }
 }
 
-/* Keep native date/time pickers readable in all browsers. */
-input[type="date"],
-input[type="time"] {
-    min-height: 2.25rem;
+/* ---------- Slide-over drawer (native <dialog>) ---------- */
+dialog.drawer {
+    position: fixed;
+    inset: 0 0 0 auto;
+    margin: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    width: min(28rem, 100vw);
+    max-width: 100vw;
+    padding: 0;
+    border: 0;
+    background: #fff;
+    box-shadow: -24px 0 48px -12px rgb(15 23 42 / 0.18);
+    transform: translateX(100%);
+    transition: transform 280ms var(--ease-out), overlay 280ms allow-discrete, display 280ms allow-discrete;
+}
+dialog.drawer[open] {
+    transform: translateX(0);
+}
+@starting-style {
+    dialog.drawer[open] {
+        transform: translateX(100%);
+    }
+}
+dialog.drawer::backdrop {
+    background: rgb(15 23 42 / 0);
+    transition: background 280ms ease, overlay 280ms allow-discrete, display 280ms allow-discrete;
+}
+dialog.drawer[open]::backdrop {
+    background: rgb(15 23 42 / 0.32);
+}
+@starting-style {
+    dialog.drawer[open]::backdrop {
+        background: rgb(15 23 42 / 0);
+    }
 }
 
-/* Occupancy bar under the day statistics. */
-progress.occupancy {
+/* Appointment length presets */
+.duration-chip[aria-pressed="true"] {
+    background: #f0fdfa;
+    color: #115e59;
+    box-shadow: inset 0 0 0 1px rgb(13 148 136 / 0.45);
+}
+
+/* ---------- Inline booking form: smooth open/close ---------- */
+.slot details::details-content {
+    height: 0;
+    overflow: clip;
+    transition: height 220ms var(--ease-out), content-visibility 220ms allow-discrete;
+}
+.slot details[open]::details-content {
+    height: auto;
+}
+.slot {
+    scroll-margin-top: 6rem;
+}
+
+/* ---------- Occupancy meters ---------- */
+progress.meter {
     appearance: none;
     border: 0;
     border-radius: 9999px;
     overflow: hidden;
-    background-color: #e0e7ff;
+    background-color: #e2e8f0;
 }
-progress.occupancy::-webkit-progress-bar {
-    background-color: #e0e7ff;
+progress.meter::-webkit-progress-bar {
+    background-color: #e2e8f0;
 }
-progress.occupancy::-webkit-progress-value {
-    background-image: linear-gradient(90deg, #3b82f6, #8b5cf6);
+progress.meter::-webkit-progress-value {
+    background-color: var(--brand);
     border-radius: 9999px;
+    transition: width 400ms var(--ease-out);
 }
-progress.occupancy::-moz-progress-bar {
-    background-image: linear-gradient(90deg, #3b82f6, #8b5cf6);
+progress.meter::-moz-progress-bar {
+    background-color: var(--brand);
     border-radius: 9999px;
 }
 
-/* Entrance animations. */
-@keyframes fade-up {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+/* ---------- Toast notifications ---------- */
+.toast {
+    animation: toast-in 320ms var(--ease-out) both;
 }
-@keyframes pop {
-    0% { opacity: 0; transform: scale(0.97); }
-    100% { opacity: 1; transform: scale(1); }
+.toast.is-leaving {
+    animation: toast-out 200ms ease-in both;
 }
-.animate-fade-up { animation: fade-up 0.5s ease-out both; }
-.animate-pop { animation: pop 0.3s ease-out both; }
-.delay-1 { animation-delay: 0.06s; }
-.delay-2 { animation-delay: 0.12s; }
-.delay-3 { animation-delay: 0.18s; }
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+@keyframes toast-out {
+    to { opacity: 0; transform: translateX(16px); }
+}
 
-/* Typing indicator dots in the assistant chat. */
+/* ---------- Busy buttons ---------- */
+.btn-spinner {
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 9999px;
+    animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ---------- Assistant chat ---------- */
+.chat-in {
+    animation: chat-in 240ms var(--ease-out) both;
+}
+@keyframes chat-in {
+    from { opacity: 0; transform: translateY(4px); }
+}
 @keyframes typing-dot {
-    0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
-    40% { opacity: 1; transform: translateY(-3px); }
+    0%, 80%, 100% { opacity: 0.3; }
+    40% { opacity: 1; }
 }
 .typing-dot {
     animation: typing-dot 1.2s infinite ease-in-out;
@@ -71,7 +161,16 @@ progress.occupancy::-moz-progress-bar {
 .typing-dot:nth-child(2) { animation-delay: 0.15s; }
 .typing-dot:nth-child(3) { animation-delay: 0.3s; }
 
+/* Native date/time pickers */
+input[type="date"],
+input[type="time"] {
+    min-height: 2.25rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
-    .animate-fade-up, .animate-pop { animation: none; }
-    .typing-dot { animation: none; opacity: 0.6; }
+    *, *::before, *::after, ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }

@@ -18,11 +18,11 @@
     const span = document.createElement("span");
     const tone =
       role === "user"
-        ? "bg-slate-800 text-white"
+        ? "bg-slate-700 text-white"
         : error
-          ? "bg-rose-100 text-rose-600"
-          : "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-indigo-500/30";
-    span.className = `inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${tone}`;
+          ? "bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-600/15"
+          : "bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-600/15";
+    span.className = `inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${tone}`;
     span.append(el(role === "user" ? "icon-user" : "icon-assistant").content.cloneNode(true));
     return span;
   }
@@ -31,11 +31,10 @@
     const item = document.createElement("li");
     item.className = role === "user" ? "flex flex-row-reverse items-end gap-2.5" : "flex items-end gap-2.5";
     const bubble = document.createElement("div");
-    const base = "animate-pop max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm";
-    if (role === "user")
-      bubble.className = `${base} rounded-br-md bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-500/25`;
+    const base = "chat-in max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed";
+    if (role === "user") bubble.className = `${base} rounded-br-md bg-teal-700 text-white shadow-xs`;
     else if (error) bubble.className = `${base} rounded-bl-md bg-rose-50 text-rose-800 ring-1 ring-rose-200`;
-    else bubble.className = `${base} rounded-bl-md bg-white text-slate-800 shadow-md shadow-slate-900/5 ring-1 ring-slate-900/5`;
+    else bubble.className = `${base} rounded-bl-md bg-white text-slate-700 shadow-xs ring-1 ring-slate-200`;
     item.append(avatar(role, error), bubble);
     messages.appendChild(item);
     messages.scrollTop = messages.scrollHeight;
@@ -62,7 +61,7 @@
     dots.className = "flex items-center gap-1";
     for (let i = 0; i < 3; i++) {
       const dot = document.createElement("span");
-      dot.className = "typing-dot h-2 w-2 rounded-full bg-indigo-400";
+      dot.className = "typing-dot h-1.5 w-1.5 rounded-full bg-slate-400";
       dots.appendChild(dot);
     }
     const note = document.createElement("span");
@@ -270,11 +269,8 @@
       const status = await response.json();
       statusDot.classList.remove("bg-slate-300", "bg-emerald-400", "bg-amber-400");
       statusDot.classList.add(status.ready ? "bg-emerald-400" : "bg-amber-400");
-      el("status-text").textContent = status.ready
-        ? `Online · ${status.provider}`
-        : status.provider
-          ? `Offline · ${status.provider}`
-          : "Not configured";
+      // Patients only need to know whether the assistant is available, not which model runs it.
+      el("status-text").textContent = status.ready ? "Online" : "Temporarily unavailable";
       if (!status.ready && status.message) {
         el("status-message").textContent = status.message;
         banner.classList.remove("hidden");

@@ -500,6 +500,7 @@ class ToolExecutor:
         self.state.pending = None  # cleared even if it fails, so a stale action can't be retried by accident
         if pending.kind == "book":
             slot = services.book_slot(self.db, pending.slot_id, pending.patient_name, pending.phone_number)
-            return {"status": "booked", "booking": slot_details(slot), "message": "Booked. Tell the patient."}
+            booking = {**slot_details(slot), "reference": slot.reference}
+            return {"status": "booked", "booking": booking, "message": "Booked. Tell the patient, including the booking reference."}
         slot = services.cancel_patient_booking(self.db, pending.slot_id, pending.patient_name, pending.phone_number)
         return {"status": "cancelled", "booking": slot_details(slot), "message": "Cancelled. Tell the patient."}

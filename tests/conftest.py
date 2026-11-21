@@ -4,6 +4,7 @@ import os
 # Use a shared in-memory database for tests. Must be set before the app is imported.
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["ASSISTANT_WARMUP"] = "0"  # never call a real model from the tests
+os.environ["AUTO_SCHEDULE"] = "0"  # tests create the slots they need
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

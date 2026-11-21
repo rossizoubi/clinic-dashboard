@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+
+{% block title %}Booking not found · ClinicBook{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-md py-10 text-center">
+    <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">{{ ui.icon("info", "h-6 w-6") }}</span>
+    <h1 class="mt-4 text-lg font-semibold text-slate-900">We couldn't find this booking</h1>
+    <p class="mt-1 text-sm text-slate-500">It may have been cancelled, or the link is incomplete.</p>
+    <div class="mt-6 flex flex-wrap justify-center gap-2">
+        <a href="/my-appointments" class="rounded-lg bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-xs ring-1 ring-slate-300 ring-inset hover:bg-slate-50">My appointments</a>
+        <a href="/" class="rounded-lg bg-teal-700 px-3.5 py-2 text-sm font-semibold text-white shadow-xs hover:bg-teal-800">Book an appointment</a>
+    </div>
+</div>
+{% endblock %}

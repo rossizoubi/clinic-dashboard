@@ -33,6 +33,8 @@ class Appointment(Base):
     end_time: Mapped[dt.time] = mapped_column(Time)
     patient_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     phone_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Short code given to the patient when they book (shown on the confirmation page).
+    reference: Mapped[str | None] = mapped_column(String(12), nullable=True, unique=True)
     is_booked: Mapped[bool] = mapped_column(Boolean, default=False)
 
     doctor: Mapped[Doctor] = relationship(back_populates="appointments")

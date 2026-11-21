@@ -3,14 +3,10 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.clinic import DOCTORS
 from app.models import Doctor
 
-DEFAULT_DOCTORS = [
-    ("Dr. Zoubi", "Cardiology"),
-    ("Dr. Sarah", "Pediatrics"),
-    ("Dr. Rasool", "Dermatology"),
-    ("Dr. Ali", "General Medicine"),
-]
+DEFAULT_DOCTORS = [(profile.name, profile.specialty) for profile in DOCTORS]
 
 
 def seed_doctors(db: Session) -> None:

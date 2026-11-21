@@ -1,46 +1,53 @@
-# ClinicBook: Clinic Appointment Booking with a Local AI Assistant
+# ClinicBook: Online Doctor Appointments with a Local AI Assistant
 
-A web app for a small clinic to publish doctors' schedules and book patient appointments.
-Staff manage schedules and bookings from a dashboard, and patients can book, check or cancel
-appointments by chatting with an **AI booking assistant that runs on a local LLM**.
+A patient-facing booking site for a small clinic. Each doctor has fixed weekly working hours;
+patients choose a doctor, pick a free time and book it themselves in under a minute, or
+simply describe what they need to an **AI booking assistant that runs on a local LLM**.
+No staff accounts or admin screens are needed: the schedule fills itself.
 
 Built with **FastAPI**, **SQLAlchemy 2.0**, **Jinja2**, **Tailwind CSS** and **Ollama** (`qwen2.5:7b`),
-with optional support for the **Claude API**. 207 tests, Docker support.
+with optional support for the **Claude API**. 192 tests, Docker support.
 
-![ClinicBook dashboard](docs/screenshot.png)
+![Choosing a doctor](docs/screenshot.png)
 
-![ClinicBook AI booking assistant](docs/assistant.png)
+![Choosing a day and time](docs/booking.png)
+
+![Booking with the AI assistant](docs/assistant.png)
+
+## How it works
+
+1. **Doctors' hours are fixed** in one place, [`app/clinic.py`](app/clinic.py) (for example *Dr. Ali: Sun–Thu, 09:00–13:00, 20-minute appointments*).
+2. **Slots are generated automatically** from those hours for the next 14 days, on startup and again the first time the site is used each day. Existing slots and bookings are never touched.
+3. **Patients book themselves**: doctor → day and time → name and phone number → confirmation with a booking reference.
+4. **Patients manage their own bookings** on *My appointments* by entering the same name and phone number.
 
 ## Features
 
-**Dashboard**
+**Self-service booking**
 
-- **Schedule generation**: create back-to-back slots for a doctor between a start and end time (1–240 minute slots).
-- **No duplicate slots**: generating a schedule twice, or with an overlapping range, only adds the free time. A database unique constraint backs this up.
+- **Three clear steps** with a progress indicator: choose a doctor (filter by specialty, see working hours and the next free time), choose a day from a two-week strip (closed and full days are marked) and a time grouped into morning/afternoon/evening, then enter your name and phone number.
+- **Confirmation page** with an unguessable booking reference (e.g. `D6ML-7BKF`), the phone number masked, and an **Add to calendar** (`.ics`) download.
+- **My appointments**: look up upcoming bookings by name **and** phone number and cancel them (after a confirmation prompt). Lookups use POST, so personal details never appear in URLs or logs.
 - **Booking rules**:
-  - A slot can only be booked once. An atomic update prevents race conditions between simultaneous requests.
-  - A patient can't book the same doctor twice on the same day.
-  - A patient can't hold two overlapping appointments.
-  - Slots that have already started can't be booked.
-- **Day overview**: doctor cards with free-slot counts for the day, day-by-day navigation, and occupancy stats.
-- **Cancel bookings** to free a slot again.
-- **Clear feedback**: every failure (missing slot, already booked, invalid input) shows a specific message.
-- **Input validation** with Pydantic: slot duration range, end time after start time, no past dates, required name and phone number.
+  - A slot can only be booked once; an atomic update prevents two people booking it at the same moment.
+  - A patient can't book the same doctor twice on one day, or hold two overlapping appointments.
+  - Times that have already started are never offered.
+- **Clear feedback**: if a time is taken while you were filling in the form, you're sent back to choose another with an explanation; invalid details keep what you typed and say what to fix.
 
 **AI booking assistant**
 
 - Chat in plain English: *"I want an appointment with a dermatologist tomorrow morning."*
-- LLM **tool calling** over the same service layer the dashboard uses.
+- LLM **tool calling** over the same service layer the booking pages use.
 - **Local-first**: runs on Ollama by default, with no API key and no internet connection.
-- **Confirmation enforced in code**: nothing is booked or cancelled until the patient confirms.
+- **Confirmation enforced in code**: nothing is booked or cancelled until the patient confirms; the patient gets the same booking reference as on the booking page.
 - **Privacy**: looking up or cancelling a booking requires the patient's name **and** phone number.
-- **Clear chat UI**: a confirmation card built from database values, quick-start suggestions, a live Online/Offline status, and an elapsed-time indicator while a local model is thinking.
 
 **Interface**
 
-- Responsive layout for desktop and mobile, built with Tailwind CSS and no build step.
-- Consistent design: shared icon and alert macros (Heroicons), a colour per specialty, gradient accents.
-- Accessible: labelled form fields, screen-reader names for icon-only links, `aria-live` chat updates, and animations turned off for users who prefer reduced motion.
+- Calm, clinical design: one teal accent colour, neutral surfaces and muted specialty tags.
+- Smooth navigation: page transitions with the View Transitions API, link prefetching with Speculation Rules, busy buttons that block double submits, and notifications that dismiss themselves.
+- Responsive for desktop and mobile, built with Tailwind CSS and no build step. Everything works without JavaScript; scripts only add enhancements.
+- Accessible: labelled form fields, a skip link, screen-reader names for icon-only links, `aria-current` on the booking steps and selected day, `aria-live` updates, and motion turned off for users who prefer reduced motion.
 
 ## Tech stack
 
@@ -70,8 +77,10 @@ cp .env.example .env        # optional: adjust settings
 uvicorn app.main:app --reload
 ```
 
-Open http://localhost:8000. The database file (`clinic.db`) and the default doctors are created on first start.
-The dashboard works on its own. The AI assistant also needs Ollama (see [AI Assistant setup](#setup)).
+Open http://localhost:8000. On first start the database (`clinic.db`), the doctors and two weeks of bookable slots are created.
+The booking pages work on their own; the AI assistant also needs Ollama (see [AI Assistant setup](#setup)).
+
+To change doctors or their hours, edit [`app/clinic.py`](app/clinic.py) and restart: new slots are added for the coming days.
 
 ## Running with Docker
 
@@ -87,7 +96,7 @@ This starts three services:
 | `ollama` | the local LLM server; models are kept in the `ollama-models` volume |
 | `ollama-init` | a one-off step that pulls `OLLAMA_MODEL` on first start (about 4.7 GB for `qwen2.5:7b`) |
 
-The dashboard is available immediately. The assistant page shows a notice until the model download finishes
+The booking pages are available immediately. The assistant page shows a notice until the model download finishes
 (`docker compose logs -f ollama-init` shows progress).
 
 Data is stored in the `clinic-data` volume and survives restarts. To use a different host port: `APP_PORT=8080 docker compose up --build`.
@@ -101,7 +110,8 @@ pytest
 
 The tests use an in-memory SQLite database and a **scripted fake LLM**, so they need no model, API key or network. They cover:
 
-- the dashboard: schedule generation, duplicate prevention, booking and double-booking rules, cancelling, input validation, HTTP routes, day navigation (including date-range edge cases)
+- the booking site: slots generated from the fixed working hours (closed days, slot lengths, daily refresh), the three booking steps, confirmation and calendar file, taken-slot handling, double-booking rules, and My appointments (lookup, cancel, and privacy)
+- the service layer: duplicate prevention, booking rules, cancelling, input validation
 - the assistant tools: argument validation, slot-ID checks, the confirmation guard, name + phone privacy rules
 - the agent loop: tool calls written as text, retry and loop limits, provider errors, fallback provider, confirm buttons
 - the Ollama and Anthropic adapters, with mocked SDK clients
@@ -111,7 +121,7 @@ The tests use an in-memory SQLite database and a **scripted fake LLM**, so they 
 
 The assistant lives at `/assistant`. A patient describes what they need, and the model calls tools to search
 for free slots, book, look up or cancel bookings. Every tool goes through `app/services.py`, so the assistant follows
-exactly the same booking rules as the dashboard.
+exactly the same booking rules as the booking pages.
 
 ### Why local-first
 
@@ -134,7 +144,7 @@ flowchart LR
         Claude["AnthropicProvider<br/>(optional)"]
     end
     Agent -->|"tool calls"| Tools["ToolExecutor<br/>tools.py"]
-    Tools -->|"Pydantic validation<br/>+ confirmation guard"| Services["services.py<br/>(shared with dashboard)"]
+    Tools -->|"Pydantic validation<br/>+ confirmation guard"| Services["services.py<br/>(shared with booking pages)"]
     Services --> DB[("SQLite")]
     Agent --- Sessions["SessionStore<br/>(in memory)"]
 ```
@@ -281,7 +291,9 @@ All settings are read from environment variables or a `.env` file (see `.env.exa
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./clinic.db` | SQLAlchemy database URL |
-| `CLINIC_TIMEZONE` | `Asia/Amman` | Timezone used for "today" and for rejecting past dates |
+| `CLINIC_TIMEZONE` | `Asia/Amman` | Timezone used for "today" and for rejecting past times |
+| `BOOKING_WINDOW_DAYS` | `14` | How many days ahead patients can book |
+| `AUTO_SCHEDULE` | `1` | Generate bookable slots from the doctors' hours automatically |
 | `LLM_PROVIDER` | `ollama` | `ollama` (local) or `anthropic` |
 | `LLM_FALLBACK_PROVIDER` | *(empty)* | Optional provider to use if the first one fails |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
@@ -303,7 +315,9 @@ clinic-dashboard/
 │   ├── database.py          # engine, session factory, Base, get_db dependency
 │   ├── models.py            # Doctor and Appointment ORM models
 │   ├── schemas.py           # Pydantic validation for form input
-│   ├── services.py          # business logic shared by dashboard and assistant
+│   ├── clinic.py            # doctors and their fixed weekly working hours
+│   ├── schedule.py          # generates bookable slots from those hours (rolling 14 days)
+│   ├── services.py          # business logic shared by the booking pages and the assistant
 │   ├── messages.py          # user-facing error/success text
 │   ├── migrations.py        # adds new nullable columns to existing SQLite databases
 │   ├── seed.py              # default doctors
@@ -319,11 +333,11 @@ clinic-dashboard/
 │   │   ├── texts.py         # fixed replies
 │   │   └── providers/       # base interface, Ollama, Anthropic, factory
 │   ├── routers/
-│   │   ├── appointments.py  # dashboard
+│   │   ├── booking.py       # choose doctor / time, book, confirmation, My appointments
 │   │   └── assistant.py     # chat page + JSON API
-│   ├── templates/           # base.html, home.html, assistant.html, _ui.html (icon/alert macros)
-│   └── static/              # css/app.css, js/assistant.js, img/logo.svg
-├── tests/                   # pytest suite (207 tests)
+│   ├── templates/           # booking steps, confirmation, my_appointments, assistant, _ui.html macros
+│   └── static/              # css/app.css, js/app.js (page enhancements), js/assistant.js, img/logo.svg
+├── tests/                   # pytest suite (192 tests)
 ├── docs/                    # screenshots
 ├── Dockerfile
 ├── docker-compose.yml       # app + ollama + model pull
@@ -334,8 +348,9 @@ clinic-dashboard/
 
 ### Design notes
 
-- **Thin routes, testable services.** Routes only parse input and pick a response; all rules live in `services.py`, which raises typed errors (`SlotNotFound`, `PatientAlreadyBooked`, …). The dashboard and the AI tools both call it.
-- **Post/Redirect/Get.** Every dashboard form post redirects back. Only message *codes* go in the URL, never raw text, so a crafted link can't inject content into the page.
+- **Thin routes, testable services.** Routes only parse input and pick a response; all rules live in `services.py`, which raises typed errors (`SlotNotFound`, `PatientAlreadyBooked`, …). The booking pages and the AI tools both call it.
+- **Post/Redirect/Get.** A successful booking redirects to its confirmation page, so refreshing never books twice. Only message *codes* go in URLs, never raw text, so a crafted link can't inject content into the page.
+- **Configuration over admin screens.** With no staff UI, the clinic's doctors and hours live in code (`app/clinic.py`) and slots are generated idempotently, so the booking window rolls forward on its own.
 - **Tailwind via CDN** keeps the project free of a Node build step. For production you would compile Tailwind into a static CSS file.
 - **One source for icons.** SVG icons are defined once (`ICON_PATHS` in `templating.py`) and rendered by a Jinja macro; the chat clones them from `<template>` elements instead of repeating the markup in JavaScript.
 - **Efficient day summary.** Per-doctor slot counts come from a single `GROUP BY` query.
